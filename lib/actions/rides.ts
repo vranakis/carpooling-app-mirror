@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { supabaseAdmin } from "../supabase/server"
 import { getCurrentUser } from "./auth"
+import { calculateRoute, type PlaceDetails } from "./google-maps"
 
 export async function getPopularRides() {
   const { data: rides, error } = await supabaseAdmin
@@ -111,8 +112,18 @@ export async function createRide(formData: FormData) {
 
     console.log("Creating ride for user:", user.id)
 
-    const origin = formData.get("origin") as string
-    const destination = formData.get("destination") as string
+    // Get place data if available
+    const originPlaceId = formData.get("originPlaceId") as string
+    const destinationPlaceId = formData.get("destinationPlaceId") as string
+    const originCoordinates = formData.get("originCoordinates") as string
+    const destinationCoordinates = formData.get("destinationCoordinates") as string
+    const originFormatted = formData.get("originFormatted") as string
+    const destinationFormatted = formData.get("destinationFormatted") as string
+
+    // Fallback to basic text inputs if place data not available
+    const origin = originFormatted || (formData.get("origin") as string)
+    const destination = destinationFormatted || (formData.get("destination") as string)
+    
     const departureTime = formData.get("departureTime") as string
     const availableSeats = Number.parseInt(formData.get("availableSeats") as string)
     const price = Number.parseFloat(formData.get("price") as string)
@@ -123,6 +134,7 @@ export async function createRide(formData: FormData) {
       departureTime,
       availableSeats,
       price,
+      hasPlaceData: !!originPlaceId && !!destinationPlaceId
     })
 
     // Validate required fields
@@ -130,20 +142,72 @@ export async function createRide(formData: FormData) {
       return { error: "Please fill in all required fields" }
     }
 
-    // Only use columns that exist in the database
+    // Parse coordinates if available
+    let originCoords = null
+    let destinationCoords = null
+    let routeInfo = null
+
+    if (originCoordinates && destinationCoordinates) {
+      try {
+        originCoords = JSON.parse(originCoordinates)
+        destinationCoords = JSON.parse(destinationCoordinates)
+
+        // Calculate route if we have place data
+        if (originPlaceId && destinationPlaceId) {
+          const originPlace: PlaceDetails = {
+            placeId: originPlaceId,
+            address: origin,
+            coordinates: originCoords,
+            formattedAddress: originFormatted
+          }
+
+          const destinationPlace: PlaceDetails = {
+            placeId: destinationPlaceId,
+            address: destination,
+            coordinates: destinationCoords,
+            formattedAddress: destinationFormatted
+          }
+
+          routeInfo = await calculateRoute(originPlace, destinationPlace)
+        }
+      } catch (error) {
+        console.error("Error parsing coordinates:", error)
+      }
+    }
+
+    // Calculate estimated arrival time if we have route info
+    let estimatedArrivalTime = departureTime
+    if (routeInfo) {
+      const departureDate = new Date(departureTime)
+      const arrivalDate = new Date(departureDate.getTime() + routeInfo.durationValue * 1000)
+      estimatedArrivalTime = arrivalDate.toISOString()
+    }
+
+    // Prepare ride data with new fields
     const rideData = {
       driver_id: user.id,
-      departure_location: origin,
-      destination,
+      origin: origin,
+      destination: destination,
       departure_time: departureTime,
+      estimated_arrival_time: estimatedArrivalTime,
       available_seats: availableSeats,
       price: price,
       status: "active",
+      // Add new fields if database supports them
+      ...(originPlaceId && { origin_place_id: originPlaceId }),
+      ...(destinationPlaceId && { destination_place_id: destinationPlaceId }),
+      ...(originCoords && { origin_coordinates: `POINT(${originCoords.lng} ${originCoords.lat})` }),
+      ...(destinationCoords && { destination_coordinates: `POINT(${destinationCoords.lng} ${destinationCoords.lat})` }),
+      ...(routeInfo && {
+        route_distance: routeInfo.distanceValue,
+        route_duration: routeInfo.durationValue,
+        route_polyline: routeInfo.polyline
+      })
     }
 
     console.log("Inserting ride data:", rideData)
 
-    const { data: ride, error } = await supabaseAdmin.from("rides").insert(rideData).select().single()
+    const { data: ride, error } = await supabaseAdmin!.from("rides").insert(rideData).select().single()
 
     if (error) {
       console.error("Error creating ride:", error)
@@ -157,7 +221,7 @@ export async function createRide(formData: FormData) {
     revalidatePath("/my-rides")
     revalidatePath("/available-rides")
 
-    return { success: true, ride }
+    return { success: true, ride, routeInfo }
   } catch (error: any) {
     console.error("Unexpected error creating ride:", error)
     return { error: error.message || "Failed to create ride" }

@@ -8,11 +8,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { ServerAddressAutocomplete } from "@/components/server-address-autocomplete"
+import { RouteMap } from "@/components/route-map"
 import { toast } from "sonner"
 import { Loader } from "lucide-react"
+import type { RouteInfo } from "@/lib/actions/google-maps"
+import type { PlaceDetails } from "@/lib/actions/places-autocomplete"
 
 export default function OfferRidePage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [originPlace, setOriginPlace] = useState<PlaceDetails | null>(null)
+  const [destinationPlace, setDestinationPlace] = useState<PlaceDetails | null>(null)
+  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null)
 
   const router = useRouter()
 
@@ -57,25 +64,37 @@ export default function OfferRidePage() {
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="origin">Origin Address</Label>
-                  <Input
-                    id="origin"
-                    name="origin"
-                    placeholder="Enter departure address (e.g., Berlin Hauptbahnhof)"
-                    required
-                  />
-                </div>
+                <ServerAddressAutocomplete
+                  label="Origin Address"
+                  placeholder="Enter departure address (e.g., Syntagma Square, Athens)"
+                  name="origin"
+                  required
+                  onPlaceSelected={setOriginPlace}
+                />
 
-                <div className="space-y-2">
-                  <Label htmlFor="destination">Destination Address</Label>
-                  <Input
-                    id="destination"
-                    name="destination"
-                    placeholder="Enter arrival address (e.g., Munich Central Station)"
-                    required
-                  />
-                </div>
+                <ServerAddressAutocomplete
+                  label="Destination Address"
+                  placeholder="Enter arrival address (e.g., Piraeus Port, Athens)"
+                  name="destination"
+                  required
+                  onPlaceSelected={setDestinationPlace}
+                />
+
+                {/* Hidden inputs to store place data for form submission */}
+                {originPlace && (
+                  <>
+                    <input type="hidden" name="originPlaceId" value={originPlace.placeId} />
+                    <input type="hidden" name="originCoordinates" value={JSON.stringify(originPlace.coordinates)} />
+                    <input type="hidden" name="originFormatted" value={originPlace.formattedAddress} />
+                  </>
+                )}
+                {destinationPlace && (
+                  <>
+                    <input type="hidden" name="destinationPlaceId" value={destinationPlace.placeId} />
+                    <input type="hidden" name="destinationCoordinates" value={JSON.stringify(destinationPlace.coordinates)} />
+                    <input type="hidden" name="destinationFormatted" value={destinationPlace.formattedAddress} />
+                  </>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -123,17 +142,34 @@ export default function OfferRidePage() {
         <Card>
           <CardHeader>
             <CardTitle>Route Preview</CardTitle>
-            <CardDescription>Map preview will be available soon</CardDescription>
+            <CardDescription>
+              {originPlace && destinationPlace
+                ? "Interactive route map with distance and duration"
+                : "Select origin and destination to see route preview"}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="w-full h-96 rounded-md border flex items-center justify-center bg-gray-50">
-              <div className="text-center p-4">
-                <p className="text-gray-600 mb-2">🗺️ Map Preview</p>
-                <p className="text-sm text-gray-500">Interactive route mapping coming soon!</p>
-                <p className="text-xs text-gray-400 mt-2">Your ride will still be created successfully</p>
-              </div>
-            </div>
+          <CardContent className="p-0">
+            <RouteMap
+              origin={originPlace}
+              destination={destinationPlace}
+              onRouteCalculated={setRouteInfo}
+              height="h-96"
+            />
           </CardContent>
+          {routeInfo && (
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                  <p className="font-medium text-emerald-700">Distance</p>
+                  <p className="text-lg font-bold text-emerald-900">{routeInfo.distance}</p>
+                </div>
+                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                  <p className="font-medium text-blue-700">Duration</p>
+                  <p className="text-lg font-bold text-blue-900">{routeInfo.duration}</p>
+                </div>
+              </div>
+            </CardContent>
+          )}
         </Card>
       </div>
     </div>

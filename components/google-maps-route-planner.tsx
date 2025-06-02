@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Loader } from "lucide-react"
-import { getGoogleMapsApiKey } from "@/lib/actions/google-maps"
+import { loadGoogleMaps, isGoogleMapsLoaded } from "@/lib/google-maps-loader"
 
 interface RouteInfo {
   distance: string
@@ -18,7 +18,6 @@ interface GoogleMapsRoutePlannerProps {
 export function GoogleMapsRoutePlanner({ onRouteCalculated }: GoogleMapsRoutePlannerProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [apiKey, setApiKey] = useState<string | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const hasInitialized = useRef(false)
 
@@ -27,56 +26,45 @@ export function GoogleMapsRoutePlanner({ onRouteCalculated }: GoogleMapsRoutePla
 
     const initializeGoogleMaps = async () => {
       try {
-        // Get API key
-        const key = await getGoogleMapsApiKey()
+        // Use centralized Google Maps loader
+        await loadGoogleMaps()
         if (!isMounted) return
 
-        setApiKey(key)
-
-        // Create a simple map without autocomplete for now
-        if (mapContainerRef.current && !hasInitialized.current) {
-          hasInitialized.current = true
-
-          // Load Google Maps script
-          const script = document.createElement("script")
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`
-          script.async = true
-
-          script.onload = () => {
-            if (!isMounted || !mapContainerRef.current) return
-
-            try {
-              // Simple map initialization
-              ;new (window as any).google.maps.Map(mapContainerRef.current, {
-                center: { lat: 52.52, lng: 13.405 },
-                zoom: 10,
-              })
-
-              if (isMounted) {
-                setIsLoading(false)
-              }
-            } catch (err) {
-              console.error("Map initialization error:", err)
-              if (isMounted) {
-                setError("Failed to initialize map")
-                setIsLoading(false)
-              }
-            }
-          }
-
-          script.onerror = () => {
-            if (isMounted) {
-              setError("Failed to load Google Maps")
-              setIsLoading(false)
-            }
-          }
-
-          document.head.appendChild(script)
-        }
+        // Initialize map after Google Maps is loaded
+        initMap()
       } catch (err) {
         console.error("Google Maps setup error:", err)
         if (isMounted) {
           setError("Failed to setup Google Maps")
+          setIsLoading(false)
+        }
+      }
+    }
+
+    const initMap = () => {
+      if (!mapContainerRef.current || hasInitialized.current) return
+
+      try {
+        // Verify Google Maps is loaded
+        if (!isGoogleMapsLoaded()) {
+          throw new Error("Google Maps not loaded")
+        }
+
+        hasInitialized.current = true
+
+        // Simple map initialization
+        new (window as any).google.maps.Map(mapContainerRef.current, {
+          center: { lat: 52.52, lng: 13.405 },
+          zoom: 10,
+        })
+
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      } catch (err) {
+        console.error("Map initialization error:", err)
+        if (isMounted) {
+          setError("Failed to initialize map")
           setIsLoading(false)
         }
       }

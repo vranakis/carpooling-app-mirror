@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Clock, MessageSquare, Star, Users } from "lucide-react"
 import Link from "next/link"
-import AppHeader from "@/components/app-header"
+
 import { getUserBookings, getUserRides } from "@/lib/actions/rides"
 import { format, isPast } from "date-fns"
 import CancelBookingButton from "@/components/cancel-booking-button"
@@ -76,10 +76,7 @@ export default function MyRidesPage() {
   const pastRides = rides?.filter((ride) => isPast(new Date(ride.departure_time)) || ride.status !== "active")
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AppHeader />
-
-      <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
+    <div className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6">My Rides</h1>
 
@@ -93,7 +90,6 @@ export default function MyRidesPage() {
 
               {/* Upcoming Rides Tab */}
               <TabsContent value="upcoming" className="space-y-4 md:space-y-6">
-                <h2 className="text-lg md:text-xl font-semibold">Rides you're booked on</h2>
 
                 {loading ? (
                   // Loading skeletons
@@ -227,8 +223,7 @@ export default function MyRidesPage() {
 
               {/* My Offerings Tab */}
               <TabsContent value="offering" className="space-y-4 md:space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-lg md:text-xl font-semibold">Rides you're offering</h2>
+                <div className="flex justify-end items-center">
                   <Button asChild className="bg-emerald-500 hover:bg-emerald-600">
                     <Link href="/offer-ride">+ Offer a new ride</Link>
                   </Button>
@@ -256,11 +251,11 @@ export default function MyRidesPage() {
                     ))
                 ) : upcomingRides && upcomingRides.length > 0 ? (
                   upcomingRides.map((ride) => {
-                    const confirmedBookings = ride.bookings?.filter((booking) => booking.status === "confirmed") || []
-                    const pendingBookings = ride.bookings?.filter((booking) => booking.status === "pending") || []
+                    const confirmedBookings = ride.bookings?.filter((booking: any) => booking.status === "confirmed") || []
+                    const pendingBookings = ride.bookings?.filter((booking: any) => booking.status === "pending") || []
                     const totalBookedSeats =
-                      confirmedBookings.reduce((total, booking) => total + booking.seats_booked, 0) +
-                      pendingBookings.reduce((total, booking) => total + booking.seats_booked, 0)
+                      confirmedBookings.reduce((total: number, booking: any) => total + booking.seats_booked, 0) +
+                      pendingBookings.reduce((total: number, booking: any) => total + booking.seats_booked, 0)
 
                     return (
                       <Card key={ride.id} className="hover:shadow-md transition-shadow">
@@ -349,7 +344,6 @@ export default function MyRidesPage() {
 
               {/* Past Rides Tab */}
               <TabsContent value="past" className="space-y-4 md:space-y-6">
-                <h2 className="text-lg md:text-xl font-semibold">Your ride history</h2>
 
                 {loading ? (
                   // Loading skeletons
@@ -470,11 +464,13 @@ export default function MyRidesPage() {
 
                 {pastRides && pastRides.length > 0 && (
                   <>
-                    <h2 className="text-xl font-semibold mt-8">Rides you've offered</h2>
+                    <div className="mt-8 mb-4">
+                      <h3 className="text-lg font-medium text-gray-700">Rides you've offered</h3>
+                    </div>
                     {pastRides.map((ride) => {
-                      const confirmedBookings = ride.bookings?.filter((booking) => booking.status === "confirmed") || []
+                      const confirmedBookings = ride.bookings?.filter((booking: any) => booking.status === "confirmed") || []
                       const totalBookedSeats = confirmedBookings.reduce(
-                        (total, booking) => total + booking.seats_booked,
+                        (total: number, booking: any) => total + booking.seats_booked,
                         0,
                       )
 
@@ -555,7 +551,6 @@ export default function MyRidesPage() {
             </Tabs>
           </PullToRefresh>
         </div>
-      </main>
     </div>
   )
 }

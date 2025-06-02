@@ -177,6 +177,13 @@ export interface Database {
           status: string
           created_at: string
           updated_at: string
+          origin_place_id: string | null
+          destination_place_id: string | null
+          origin_coordinates: string | null
+          destination_coordinates: string | null
+          route_distance: number | null
+          route_duration: number | null
+          route_polyline: string | null
         }
         Insert: {
           id?: string
@@ -192,6 +199,13 @@ export interface Database {
           status?: string
           created_at?: string
           updated_at?: string
+          origin_place_id?: string | null
+          destination_place_id?: string | null
+          origin_coordinates?: string | null
+          destination_coordinates?: string | null
+          route_distance?: number | null
+          route_duration?: number | null
+          route_polyline?: string | null
         }
         Update: {
           id?: string
@@ -207,6 +221,13 @@ export interface Database {
           status?: string
           created_at?: string
           updated_at?: string
+          origin_place_id?: string | null
+          destination_place_id?: string | null
+          origin_coordinates?: string | null
+          destination_coordinates?: string | null
+          route_distance?: number | null
+          route_duration?: number | null
+          route_polyline?: string | null
         }
       }
       vehicles: {
@@ -251,6 +272,44 @@ export interface Database {
           is_active?: boolean
           created_at?: string
           updated_at?: string
+        }
+      }
+      route_segments: {
+        Row: {
+          id: string
+          ride_id: string
+          start_place_id: string | null
+          end_place_id: string | null
+          start_coordinates: string | null
+          end_coordinates: string | null
+          segment_order: number
+          distance_meters: number | null
+          duration_seconds: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          ride_id: string
+          start_place_id?: string | null
+          end_place_id?: string | null
+          start_coordinates?: string | null
+          end_coordinates?: string | null
+          segment_order: number
+          distance_meters?: number | null
+          duration_seconds?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          ride_id?: string
+          start_place_id?: string | null
+          end_place_id?: string | null
+          start_coordinates?: string | null
+          end_coordinates?: string | null
+          segment_order?: number
+          distance_meters?: number | null
+          duration_seconds?: number | null
+          created_at?: string
         }
       }
     }
