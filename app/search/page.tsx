@@ -40,7 +40,7 @@ export default async function SearchPage({
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <h3 className="text-lg font-medium">No rides found</h3>
               <p className="text-muted-foreground mt-1">Try adjusting your search criteria</p>
               <Button asChild className="mt-4 bg-emerald-500 hover:bg-emerald-600">

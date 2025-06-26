@@ -1,12 +1,19 @@
 "use server";
 
 export async function getGoogleMapsApiKey() {
-  // Try both environment variable names for compatibility
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
-
   if (!apiKey) {
     throw new Error(
-      "Google Maps API key not configured. Please set GOOGLE_MAPS_API_KEY or NEXT_PUBLIC_GOOGLE_API_KEY in your environment variables."
+      "Google Maps API key not configured. Please set NEXT_PUBLIC_GOOGLE_API_KEY in your environment variables."
+    );
+  }
+
+  if (!apiKey.startsWith("AIza")) {
+    console.warn(
+      "Google Maps API key format is invalid. It should start with 'AIza'."
+    );
+    throw new Error(
+      "Invalid Google Maps API key format. Key should start with 'AIza'."
     );
   }
 
@@ -26,8 +33,8 @@ export interface PlaceDetails {
 export interface RouteInfo {
   distance: string;
   duration: string;
-  distanceValue: number; // in meters
-  durationValue: number; // in seconds
+  distanceValue: number;
+  durationValue: number;
   polyline: string;
   bounds: {
     northeast: { lat: number; lng: number };
@@ -35,170 +42,160 @@ export interface RouteInfo {
   };
 }
 
-// Calculate route between two places using the new Routes API
 export async function calculateRoute(
   origin: PlaceDetails,
-  destination: PlaceDetails
+  destination: PlaceDetails,
+  maxRetries = 3,
+  retryDelay = 1000
 ): Promise<RouteInfo | null> {
-  try {
-    const apiKey = await getGoogleMapsApiKey();
+  let retries = 0;
 
-    // Use the new Routes API (New)
-    const requestBody = {
-      origin: {
-        placeId: origin.placeId,
-      },
-      destination: {
-        placeId: destination.placeId,
-      },
-      travelMode: "DRIVE",
-      routingPreference: "TRAFFIC_AWARE",
-      computeAlternativeRoutes: false,
-      routeModifiers: {
-        avoidTolls: false,
-        avoidHighways: false,
-        avoidFerries: false,
-      },
-    };
-
-    const response = await fetch(
-      `https://routes.googleapis.com/directions/v2:computeRoutes`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.viewport',
+  const attemptRouteCalculation = async (): Promise<RouteInfo | null> => {
+    try {
+      const apiKey = await getGoogleMapsApiKey();
+      const requestBody = {
+        origin: {
+          location: {
+            latLng: {
+              latitude: origin.coordinates.lat,
+              longitude: origin.coordinates.lng,
+            },
+          },
         },
-        body: JSON.stringify(requestBody),
+        destination: {
+          location: {
+            latLng: {
+              latitude: destination.coordinates.lat,
+              longitude: destination.coordinates.lng,
+            },
+          },
+        },
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_AWARE",
+        computeAlternativeRoutes: false,
+        routeModifiers: {
+          avoidTolls: false,
+          avoidHighways: false,
+          avoidFerries: false,
+        },
+      };
+
+      const timeoutPromise = new Promise<Response>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(new Error("Route calculation timed out after 30 seconds")),
+          30000
+        );
+      });
+
+      console.log(`Attempt ${retries + 1}/${maxRetries} to calculate route:`, {
+        origin: { lat: origin.coordinates.lat, lng: origin.coordinates.lng },
+        destination: {
+          lat: destination.coordinates.lat,
+          lng: destination.coordinates.lng,
+        },
+      });
+
+      const response = await Promise.race([
+        fetch(`https://routes.googleapis.com/directions/v2:computeRoutes`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask":
+              "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.viewport",
+          },
+          body: JSON.stringify(requestBody),
+        }),
+        timeoutPromise,
+      ]);
+
+      if (!response.ok) {
+        const errorText = await response
+          .text()
+          .catch(() => "Failed to read error response");
+        console.error(
+          `Routes API error: ${response.status} ${response.statusText}`,
+          errorText
+        );
+        throw new Error(`Routes API failed: ${response.status} - ${errorText}`);
       }
-    );
 
-    if (!response.ok) {
-      console.error("Routes API (New) error:", response.status, response.statusText);
-      // Fallback to legacy Directions API
-      return calculateRouteLegacy(origin, destination);
-    }
+      const data = await response.json();
+      console.log("Routes API response:", JSON.stringify(data, null, 2));
 
-    const data = await response.json();
+      if (!data.routes || data.routes.length === 0) {
+        console.error("No routes found:", data);
+        throw new Error("No routes found");
+      }
 
-    if (!data.routes || data.routes.length === 0) {
-      console.error("No routes found:", data);
-      return calculateRouteLegacy(origin, destination);
-    }
+      const route = data.routes[0];
+      const durationSeconds = parseInt(route.duration.replace("s", ""));
+      const hours = Math.floor(durationSeconds / 3600);
+      const minutes = Math.floor((durationSeconds % 3600) / 60);
+      const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+      const distanceKm = route.distanceMeters / 1000;
+      const distanceText =
+        distanceKm >= 1
+          ? `${distanceKm.toFixed(1)} km`
+          : `${route.distanceMeters} m`;
 
-    const route = data.routes[0];
-
-    // Convert duration from seconds string to readable format
-    const durationSeconds = parseInt(route.duration.replace('s', ''));
-    const hours = Math.floor(durationSeconds / 3600);
-    const minutes = Math.floor((durationSeconds % 3600) / 60);
-    const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-
-    // Convert distance from meters to readable format
-    const distanceMeters = route.distanceMeters;
-    const distanceKm = distanceMeters / 1000;
-    const distanceText = distanceKm >= 1 ? `${distanceKm.toFixed(1)} km` : `${distanceMeters} m`;
-
-    return {
-      distance: distanceText,
-      duration: durationText,
-      distanceValue: distanceMeters,
-      durationValue: durationSeconds,
-      polyline: route.polyline.encodedPolyline,
-      bounds: {
-        northeast: {
-          lat: route.viewport.high.latitude,
-          lng: route.viewport.high.longitude,
+      return {
+        distance: distanceText,
+        duration: durationText,
+        distanceValue: route.distanceMeters,
+        durationValue: durationSeconds,
+        polyline: route.polyline.encodedPolyline,
+        bounds: {
+          northeast: {
+            lat: route.viewport.high.latitude,
+            lng: route.viewport.high.longitude,
+          },
+          southwest: {
+            lat: route.viewport.low.latitude,
+            lng: route.viewport.low.longitude,
+          },
         },
-        southwest: {
-          lat: route.viewport.low.latitude,
-          lng: route.viewport.low.longitude,
-        },
-      },
-    };
-  } catch (error) {
-    console.error("Error calculating route:", error);
-    // Fallback to legacy API
-    return calculateRouteLegacy(origin, destination);
-  }
+      };
+    } catch (error) {
+      if (retries < maxRetries) {
+        retries++;
+        console.warn(
+          `Route calculation failed, retrying (${retries}/${maxRetries})...`,
+          error
+        );
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        return attemptRouteCalculation();
+      }
+      console.error("Error calculating route with Routes API:", error);
+      throw error;
+    }
+  };
+
+  return attemptRouteCalculation();
 }
 
-// Fallback function using legacy Directions API
-async function calculateRouteLegacy(
-  origin: PlaceDetails,
-  destination: PlaceDetails
-): Promise<RouteInfo | null> {
-  try {
-    const apiKey = await getGoogleMapsApiKey();
-
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/directions/json?` +
-        `origin=place_id:${origin.placeId}&` +
-        `destination=place_id:${destination.placeId}&` +
-        `key=${apiKey}`
-    );
-
-    const data = await response.json();
-
-    if (data.status !== "OK" || !data.routes || data.routes.length === 0) {
-      console.error("Directions API error:", data);
-      return null;
-    }
-
-    const route = data.routes[0];
-    const leg = route.legs[0];
-
-    return {
-      distance: leg.distance.text,
-      duration: leg.duration.text,
-      distanceValue: leg.distance.value,
-      durationValue: leg.duration.value,
-      polyline: route.overview_polyline.points,
-      bounds: {
-        northeast: {
-          lat: route.bounds.northeast.lat,
-          lng: route.bounds.northeast.lng,
-        },
-        southwest: {
-          lat: route.bounds.southwest.lat,
-          lng: route.bounds.southwest.lng,
-        },
-      },
-    };
-  } catch (error) {
-    console.error("Error calculating route with legacy API:", error);
-    return null;
-  }
-}
-
-// Validate a place ID using the new Places API
 export async function validatePlaceId(
   placeId: string
 ): Promise<PlaceDetails | null> {
   try {
     const apiKey = await getGoogleMapsApiKey();
-
-    // Use the new Places API (New) endpoint
     const response = await fetch(
-      `https://places.googleapis.com/v1/places/${placeId}?` +
-        `fields=id,displayName,formattedAddress,location&` +
-        `key=${apiKey}`,
+      `https://places.googleapis.com/v1/places/${placeId}?fields=id,displayName,formattedAddress,location&key=${apiKey}`,
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       }
     );
 
     if (!response.ok) {
-      console.error("Places API (New) error:", response.status, response.statusText);
+      console.error("Places API error:", response.status, response.statusText);
       return null;
     }
 
     const place = await response.json();
-
     if (!place.id || !place.location) {
       console.error("Invalid place data:", place);
       return null;

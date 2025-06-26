@@ -32,8 +32,8 @@ export default function EditProfilePage() {
       setFormData({
         firstName: profile.first_name || "",
         lastName: profile.last_name || "",
-        phone: profile.phone || "",
-        bio: profile.bio || "",
+        phone: profile.phone_number || "",
+        bio: "",
       })
     }
   }, [profile])
@@ -69,8 +69,7 @@ export default function EditProfilePage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <AppHeader />
-        <main className="container mx-auto px-4 py-8">
+                <main className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto">
             <p className="text-center">Loading profile...</p>
           </div>
@@ -79,11 +78,9 @@ export default function EditProfilePage() {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <AppHeader />
-
-      <main className="container mx-auto px-4 py-8">
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <main className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           <Link href="/profile" className="flex items-center text-emerald-600 mb-6">
             <ChevronLeft className="h-4 w-4 mr-1" /> Back to profile

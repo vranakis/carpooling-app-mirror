@@ -1,19 +1,20 @@
-"use client"
+"use client";
 
-import { useEffect, useRef, useState } from "react"
-import { Loader, MapPin, Clock, Route } from "lucide-react"
-import { calculateRoute } from "@/lib/actions/google-maps"
-import { loadGoogleMaps, isGoogleMapsLoaded } from "@/lib/google-maps-loader"
-import type { RouteInfo } from "@/lib/actions/google-maps"
-import type { PlaceDetails } from "@/lib/actions/places-autocomplete"
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import debounce from "lodash/debounce";
+import { Loader, MapPin, Clock, Route } from "lucide-react";
+import { calculateRoute, getGoogleMapsApiKey } from "@/lib/actions/google-maps";
+import { loadGoogleMaps, isGoogleMapsLoaded } from "@/lib/google-maps-loader";
+import type { RouteInfo } from "@/lib/actions/google-maps";
+import type { PlaceDetails } from "@/lib/actions/places-autocomplete";
 
 interface RouteMapProps {
-  origin?: PlaceDetails | null
-  destination?: PlaceDetails | null
-  routeInfo?: RouteInfo | null
-  onRouteCalculated?: (routeInfo: RouteInfo | null) => void
-  className?: string
-  height?: string
+  origin?: PlaceDetails | null;
+  destination?: PlaceDetails | null;
+  routeInfo?: RouteInfo | null;
+  onRouteCalculated?: (routeInfo: RouteInfo | null) => void;
+  className?: string;
+  height?: string;
 }
 
 export function RouteMap({
@@ -22,226 +23,296 @@ export function RouteMap({
   routeInfo,
   onRouteCalculated,
   className = "",
-  height = "h-96"
+  height = "h-96",
 }: RouteMapProps) {
-  const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<google.maps.Map | null>(null)
-  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null)
-  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null)
-  const [isMapLoading, setIsMapLoading] = useState(false)
-  const [isRouteLoading, setIsRouteLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [currentRouteInfo, setCurrentRouteInfo] = useState<RouteInfo | null>(routeInfo || null)
-  const hasInitialized = useRef(false)
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const polylineRef = useRef<google.maps.Polyline | null>(null);
+  const [isMapLoading, setIsMapLoading] = useState(true);
+  const [isRouteLoading, setIsRouteLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentRouteInfo, setCurrentRouteInfo] = useState<RouteInfo | null>(
+    routeInfo || null
+  );
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const hasInitialized = useRef(false);
 
-  // Only start loading the map when we have addresses to show
+  // Stabilize origin and destination to prevent unnecessary re-renders
+  const originMemo = useMemo(
+    () => origin,
+    [origin?.placeId, origin?.coordinates?.lat, origin?.coordinates?.lng]
+  );
+  const destinationMemo = useMemo(
+    () => destination,
+    [
+      destination?.placeId,
+      destination?.coordinates?.lat,
+      destination?.coordinates?.lng,
+    ]
+  );
+
+  // Fetch API key for static map fallback
   useEffect(() => {
-    if (!origin || !destination) {
-      // Clear any existing route info when addresses are removed
-      setCurrentRouteInfo(null)
-      onRouteCalculated?.(null)
-      return
-    }
-
-    // Start map loading only when we have both addresses
-    if (!hasInitialized.current) {
-      setIsMapLoading(true)
-      initializeMap()
-    } else if (directionsServiceRef.current && directionsRendererRef.current) {
-      // Map already initialized, just calculate route
-      calculateAndDisplayRoute()
-    }
-  }, [origin, destination])
-
-  const initializeMap = async () => {
-    let isMounted = true
-
-    try {
-      // Use centralized Google Maps loader
-      await loadGoogleMaps()
-      if (!isMounted) return
-
-      // Initialize map after Google Maps is loaded
-      initMap()
-    } catch (err) {
-      console.error("Error initializing map:", err)
-      if (isMounted) {
-        setError("Failed to initialize map")
-        setIsMapLoading(false)
+    const fetchApiKey = async () => {
+      try {
+        const key = await getGoogleMapsApiKey();
+        setApiKey(key);
+      } catch (err) {
+        console.error("Error fetching API key for static map:", err);
+        setError("Failed to load API key for map fallback");
       }
-    }
+    };
+    fetchApiKey();
+  }, []);
 
+  // Initialize map
+  useEffect(() => {
+    let isMounted = true;
+
+    const initialize = async () => {
+      console.log("Checking initialization status...", {
+        hasInitialized: hasInitialized.current,
+        isGoogleMapsLoaded: isGoogleMapsLoaded(),
+      });
+      if (
+        hasInitialized.current &&
+        isGoogleMapsLoaded() &&
+        mapContainerRef.current
+      ) {
+        console.log("Map already initialized, checking for route update...");
+        if (originMemo && destinationMemo) {
+          calculateAndDisplayRoute();
+        }
+        setIsMapLoading(false);
+        return;
+      }
+
+      console.log("Initiating map loading...");
+      setIsMapLoading(true);
+      try {
+        await loadGoogleMaps();
+        if (!isMounted) {
+          console.log("Component unmounted during map loading");
+          return;
+        }
+
+        // Wait for map container to be available
+        const waitForContainer = async (
+          retries = 5,
+          delay = 100
+        ): Promise<void> => {
+          if (mapContainerRef.current) {
+            initMap();
+            return;
+          }
+          if (retries === 0) {
+            throw new Error("Map container ref is null after retries");
+          }
+          console.log(`Waiting for map container, retries left: ${retries}`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return waitForContainer(retries - 1, delay);
+        };
+
+        await waitForContainer();
+      } catch (err) {
+        console.error("Map initialization error:", err);
+        if (isMounted) {
+          setError(
+            err instanceof Error ? err.message : "Failed to initialize map"
+          );
+          setIsMapLoading(false);
+        }
+      }
+    };
+
+    initialize();
     return () => {
-      isMounted = false
-    }
-  }
+      isMounted = false;
+      console.log("Cleaning up map useEffect");
+    };
+  }, [originMemo, destinationMemo]);
 
-  const initMap = () => {
-    if (!mapContainerRef.current || hasInitialized.current) return
+  const initMap = useCallback(() => {
+    if (!mapContainerRef.current) {
+      console.error("Map container ref is null in initMap");
+      setError("Map container not found");
+      setIsMapLoading(false);
+      return;
+    }
+
+    if (hasInitialized.current) {
+      console.log("Map already initialized, skipping creation...");
+      if (originMemo && destinationMemo) {
+        calculateAndDisplayRoute();
+      }
+      return;
+    }
 
     try {
-      // Verify Google Maps is loaded
       if (!isGoogleMapsLoaded()) {
-        throw new Error("Google Maps not loaded")
+        throw new Error("Google Maps API not loaded");
       }
 
-      hasInitialized.current = true
+      console.log("Creating Google Map instance...");
+      hasInitialized.current = true;
 
-      // Create map
       mapRef.current = new google.maps.Map(mapContainerRef.current, {
         center: { lat: 37.9755, lng: 23.7348 }, // Default to Athens
         zoom: 6,
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
-      })
+      });
 
-      // Initialize directions service and renderer
-      directionsServiceRef.current = new google.maps.DirectionsService()
-      directionsRendererRef.current = new google.maps.DirectionsRenderer({
-        suppressMarkers: false,
-        polylineOptions: {
-          strokeColor: "#10b981", // Emerald color
-          strokeWeight: 4,
-          strokeOpacity: 0.8,
-        },
-      })
-
-      directionsRendererRef.current.setMap(mapRef.current)
-
-      setIsMapLoading(false)
-
-      // Calculate route if we have both origin and destination
-      if (origin && destination) {
-        calculateAndDisplayRoute()
-      }
-    } catch (err) {
-      console.error("Map initialization error:", err)
-      setError("Failed to initialize map")
-      setIsMapLoading(false)
-    }
-  }
-
-  const calculateAndDisplayRoute = async () => {
-    if (!origin || !destination || !directionsServiceRef.current || !directionsRendererRef.current) {
-      return
-    }
-
-    setIsRouteLoading(true)
-
-    try {
-      // First try to get route info using the new Routes API
-      const routeInfo = await calculateRoute(origin, destination)
-      
-      if (routeInfo) {
-        setCurrentRouteInfo(routeInfo)
-        onRouteCalculated?.(routeInfo)
-      }
-
-      // Still use the legacy Directions API for map visualization
-      // as it integrates better with the Google Maps JavaScript API
-      const request: google.maps.DirectionsRequest = {
-        origin: { placeId: origin.placeId },
-        destination: { placeId: destination.placeId },
-        travelMode: google.maps.TravelMode.DRIVING,
-        unitSystem: google.maps.UnitSystem.METRIC,
-        avoidHighways: false,
-        avoidTolls: false,
-      }
-
-      directionsServiceRef.current.route(request, (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
-          directionsRendererRef.current!.setDirections(result)
-
-          // If we didn't get route info from the new API, use legacy data
-          if (!routeInfo) {
-            const route = result.routes[0]
-            const leg = route.legs[0]
-
-            const legacyRouteInfo: RouteInfo = {
-              distance: leg.distance?.text || "",
-              duration: leg.duration?.text || "",
-              distanceValue: leg.distance?.value || 0,
-              durationValue: leg.duration?.value || 0,
-              polyline: (route.overview_polyline as any)?.points || "",
-              bounds: {
-                northeast: {
-                  lat: route.bounds?.getNorthEast().lat() || 0,
-                  lng: route.bounds?.getNorthEast().lng() || 0,
-                },
-                southwest: {
-                  lat: route.bounds?.getSouthWest().lat() || 0,
-                  lng: route.bounds?.getSouthWest().lng() || 0,
-                },
-              },
+      setIsMapLoading(false);
+      console.log("Map initialized, checking for origin and destination:", {
+        origin: originMemo
+          ? { lat: originMemo.coordinates.lat, lng: originMemo.coordinates.lng }
+          : null,
+        destination: destinationMemo
+          ? {
+              lat: destinationMemo.coordinates.lat,
+              lng: destinationMemo.coordinates.lng,
             }
-
-            setCurrentRouteInfo(legacyRouteInfo)
-            onRouteCalculated?.(legacyRouteInfo)
-          }
-        } else {
-          console.error("Directions request failed:", status)
-          if (!routeInfo) {
-            setCurrentRouteInfo(null)
-            onRouteCalculated?.(null)
-          }
-        }
-        setIsRouteLoading(false)
-      })
+          : null,
+      });
+      if (originMemo && destinationMemo) {
+        console.log("Triggering route calculation...");
+        calculateAndDisplayRoute();
+      }
     } catch (err) {
-      console.error("Error calculating route:", err)
-      setCurrentRouteInfo(null)
-      onRouteCalculated?.(null)
-      setIsRouteLoading(false)
+      console.error("Map initialization error:", err);
+      setError(err instanceof Error ? err.message : "Failed to initialize map");
+      setIsMapLoading(false);
     }
-  }
+  }, [originMemo, destinationMemo]);
 
-  // Show error state
-  if (error) {
-    return (
-      <div className={`w-full ${height} rounded-md border flex items-center justify-center bg-gray-50 ${className}`}>
-        <div className="text-center p-4">
-          <MapPin className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-          <p className="text-red-600 mb-2">Map temporarily unavailable</p>
-          <p className="text-sm text-gray-500">Route information will still be calculated</p>
-        </div>
-      </div>
-    )
-  }
+  const calculateAndDisplayRoute = useCallback(
+    debounce(async () => {
+      if (!originMemo || !destinationMemo) {
+        console.log("Missing required data for route calculation:", {
+          origin: originMemo,
+          destination: destinationMemo,
+        });
+        return;
+      }
 
-  // Show placeholder when no addresses are provided
-  if (!origin || !destination) {
-    return (
-      <div className={`w-full ${height} rounded-md border flex items-center justify-center bg-gray-50 ${className}`}>
-        <div className="text-center p-4">
-          <MapPin className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-          <p className="text-gray-600 mb-2">Route Preview</p>
-          <p className="text-sm text-gray-500">Select origin and destination to see route preview</p>
-        </div>
-      </div>
-    )
-  }
+      setIsRouteLoading(true);
+      console.log("Calculating route for:", {
+        origin: {
+          lat: originMemo.coordinates.lat,
+          lng: originMemo.coordinates.lng,
+        },
+        destination: {
+          lat: destinationMemo.coordinates.lat,
+          lng: destinationMemo.coordinates.lng,
+        },
+      });
 
-  // Show loading state when map is initializing or route is calculating
-  if (isMapLoading || isRouteLoading) {
-    return (
-      <div className={`w-full ${height} rounded-md border flex items-center justify-center bg-gray-50 ${className}`}>
-        <div className="text-center">
-          <Loader className="h-8 w-8 animate-spin text-gray-400 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">
-            {isMapLoading ? "Loading map..." : "Calculating route..."}
-          </p>
-        </div>
-      </div>
-    )
-  }
+      try {
+        const routeInfo = await calculateRoute(originMemo, destinationMemo);
+        console.log("Routes API result:", routeInfo);
 
+        if (routeInfo && mapRef.current) {
+          setCurrentRouteInfo(routeInfo);
+          onRouteCalculated?.(routeInfo);
+
+          // Clear previous polyline
+          if (polylineRef.current) {
+            polylineRef.current.setMap(null);
+          }
+
+          // Decode polyline and render on map
+          const decodedPath = google.maps.geometry.encoding.decodePath(
+            routeInfo.polyline
+          );
+          polylineRef.current = new google.maps.Polyline({
+            path: decodedPath,
+            strokeColor: "#10b981",
+            strokeWeight: 4,
+            strokeOpacity: 0.8,
+            map: mapRef.current,
+          });
+
+          // Add markers for origin and destination
+          new google.maps.Marker({
+            position: originMemo.coordinates,
+            map: mapRef.current,
+            title: originMemo.address,
+          });
+          new google.maps.Marker({
+            position: destinationMemo.coordinates,
+            map: mapRef.current,
+            title: destinationMemo.address,
+          });
+
+          // Fit map to bounds
+          const bounds = new google.maps.LatLngBounds();
+          bounds.extend({
+            lat: routeInfo.bounds.northeast.lat,
+            lng: routeInfo.bounds.northeast.lng,
+          });
+          bounds.extend({
+            lat: routeInfo.bounds.southwest.lat,
+            lng: routeInfo.bounds.southwest.lng,
+          });
+          mapRef.current.fitBounds(bounds);
+        } else {
+          setCurrentRouteInfo(null);
+          onRouteCalculated?.(null);
+          setError("No route found");
+        }
+      } catch (err) {
+        console.error("Error calculating route:", err);
+        setCurrentRouteInfo(null);
+        onRouteCalculated?.(null);
+        setError(
+          err instanceof Error ? err.message : "Failed to calculate route"
+        );
+      } finally {
+        setIsRouteLoading(false);
+      }
+    }, 500),
+    [originMemo, destinationMemo]
+  );
+
+  // Always render the map container
   return (
-    <div className={`w-full ${height} rounded-md border overflow-hidden relative ${className}`}>
-      <div ref={mapContainerRef} className="w-full h-full" />
-      
-      {/* Route Information Overlay */}
-      {currentRouteInfo && (
+    <div
+      className={`w-full ${height} rounded-md border overflow-hidden relative ${className}`}
+    >
+      <div
+        ref={mapContainerRef}
+        className="w-full h-full"
+        style={{ minHeight: "384px" }}
+      />
+      {error ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-80">
+          <div className="text-center p-4">
+            <MapPin className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-red-600 mb-2">{error}</p>
+            <p className="text-sm text-gray-500">
+              Route information will still be calculated
+            </p>
+            {originMemo && destinationMemo && apiKey && (
+              <img
+                src={`https://maps.googleapis.com/maps/api/staticmap?center=37.9755,23.7348&zoom=6&size=600x400&key=${apiKey}`}
+                alt="Static map fallback"
+                className="w-full h-48 mt-2 rounded-md object-cover"
+              />
+            )}
+          </div>
+        </div>
+      ) : isMapLoading || isRouteLoading ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-80">
+          <div className="text-center">
+            <Loader className="h-8 w-8 animate-spin text-gray-400 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">
+              {isMapLoading ? "Loading map..." : "Calculating route..."}
+            </p>
+          </div>
+        </div>
+      ) : currentRouteInfo ? (
         <div className="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-3 max-w-xs">
           <div className="flex items-center space-x-2 text-sm">
             <Route className="h-4 w-4 text-emerald-600" />
@@ -258,7 +329,7 @@ export function RouteMap({
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
-  )
+  );
 }

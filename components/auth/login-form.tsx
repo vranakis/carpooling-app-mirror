@@ -94,7 +94,7 @@ export function LoginForm() {
               type="email"
               placeholder="m@example.com"
               required
-              autocomplete="email"
+              autoComplete="email"
             />
           </div>
           <div className="space-y-2">
@@ -104,7 +104,7 @@ export function LoginForm() {
               name="password"
               type="password"
               required
-              autocomplete="current-password"
+              autoComplete="current-password"
             />
           </div>
           {error && <div className="text-sm text-red-500">{error}</div>}

@@ -33,11 +33,51 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user && !request.nextUrl.pathname.startsWith("/auth") && !request.nextUrl.pathname.startsWith("/api")) {
-    // no user, potentially respond by redirecting the user to the login page
-    const url = request.nextUrl.clone()
-    url.pathname = "/auth/login"
-    return NextResponse.redirect(url)
+  // Define protected routes that require authentication
+  const protectedRoutes = [
+    "/messages",
+    "/profile",
+    "/my-rides",
+    "/offer-ride",
+    "/book",
+    "/manage-booking",
+    "/notifications",
+    "/notification-settings",
+    "/tracking",
+    "/share-trip",
+    "/commute-routes",
+    "/available-rides",
+    "/public-transport",
+    "/search",
+    "/ride",
+    "/impact",
+    "/traffic-impact",
+    "/safety"
+  ];
+
+  const isProtectedRoute = protectedRoutes.some(route => request.nextUrl.pathname.startsWith(route));
+
+  if (!user && isProtectedRoute) {
+    // No user detected and trying to access a protected route, redirect to login
+    const hasAuthCookie = request.cookies.getAll().some(cookie => cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token'));
+    if (!hasAuthCookie) {
+      console.log("No auth cookie found, redirecting to login. Path:", request.nextUrl.pathname);
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/login";
+      url.searchParams.set("redirect", request.nextUrl.pathname + request.nextUrl.search);
+      return NextResponse.redirect(url);
+    } else {
+      console.log("Auth cookie found but no user detected. Possible refresh token failure. Clearing cookies and redirecting to login. Path:", request.nextUrl.pathname);
+      // Clear potentially invalid cookies
+      const cookieNames = request.cookies.getAll()
+        .filter(cookie => cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token'))
+        .map(cookie => cookie.name);
+      cookieNames.forEach(name => supabaseResponse.cookies.delete(name));
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/login";
+      url.searchParams.set("redirect", request.nextUrl.pathname + request.nextUrl.search);
+      return NextResponse.redirect(url);
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're

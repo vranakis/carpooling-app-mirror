@@ -42,7 +42,7 @@ export function SearchForm({ defaultOrigin = "", defaultDestination = "", defaul
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 sticky top-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 sticky top-4">
       <h2 className="font-medium flex items-center mb-4">
         <Filter className="h-4 w-4 mr-2" />
         Search Filters

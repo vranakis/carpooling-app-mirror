@@ -15,7 +15,7 @@ export function createClient() {
     )
   }
 
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
+  const client = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
@@ -27,5 +27,10 @@ export function createClient() {
         'X-Client-Info': 'carpooling-app'
       }
     }
-  })
+  });
+  // NOTE: If experiencing persistent logouts with 400 Bad Request on token refresh,
+  // check Supabase dashboard for token expiration settings and refresh token rotation policies.
+  // Consider adding custom error handling for refresh token failures if the issue persists.
+  console.log("Supabase client initialized with autoRefreshToken enabled. If logouts occur, check refresh token errors.");
+  return client;
 }

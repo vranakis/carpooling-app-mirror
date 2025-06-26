@@ -6,6 +6,11 @@ import { getCurrentUser } from "./auth"
 import { calculateRoute, type PlaceDetails } from "./google-maps"
 
 export async function getPopularRides() {
+  if (!supabaseAdmin) {
+    console.error("Supabase admin client not available")
+    return []
+  }
+
   const { data: rides, error } = await supabaseAdmin
     .from("rides")
     .select(`
@@ -38,6 +43,11 @@ export async function getRides(
     date?: string
   } = {},
 ) {
+  if (!supabaseAdmin) {
+    console.error("Supabase admin client not available")
+    return []
+  }
+
   let query = supabaseAdmin.from("rides").select(`
       *,
       profiles!rides_driver_id_fkey(id, first_name, last_name, avatar_url)
@@ -91,15 +101,160 @@ export async function getRides(
 }
 
 export async function searchRides(formData: FormData) {
-  const origin = formData.get("origin") as string
-  const destination = formData.get("destination") as string
-  const date = formData.get("date") as string
+  const origin = formData.get("origin") as string;
+  const destination = formData.get("destination") as string;
+  const date = formData.get("date") as string;
+  const originPlaceId = formData.get("originPlaceId") as string;
+  const destinationPlaceId = formData.get("destinationPlaceId") as string;
 
-  return getRides({
-    origin,
-    destination,
-    date,
-  })
+  console.log("Search parameters:", { origin, destination, date, originPlaceId, destinationPlaceId });
+
+  // For debugging, get all active rides ignoring date filter to ensure we don't miss matches
+  const rides = await getRides({
+    status: "active",
+  });
+
+  console.log(`Found ${rides.length} active rides (ignoring date filter for debugging).`);
+  console.log(`Search date provided: ${date}`);
+
+  if (!originPlaceId || !destinationPlaceId) {
+    // Fallback to basic string matching if place IDs are not available
+    console.log("Falling back to string matching as place IDs are not provided.");
+    const filteredRides = rides.filter(ride => {
+      const departureLocation = ride.departure_location || '';
+      const rideDestination = ride.destination || '';
+      const originLower = origin || '';
+      const destinationLower = destination || '';
+      // More lenient matching: check if either string contains parts of the other
+      const originMatch = departureLocation.toLowerCase().includes(originLower.toLowerCase()) || 
+                          originLower.toLowerCase().includes(departureLocation.toLowerCase());
+      const destMatch = rideDestination.toLowerCase().includes(destinationLower.toLowerCase()) || 
+                        destinationLower.toLowerCase().includes(rideDestination.toLowerCase());
+      const matches = originMatch && destMatch;
+      if (!matches) {
+        console.log(`Ride ${ride.id} does not match string criteria: ${departureLocation} -> ${rideDestination} (searching for: ${originLower} -> ${destinationLower})`);
+      } else {
+        console.log(`Ride ${ride.id} matches string criteria: ${departureLocation} -> ${rideDestination}`);
+      }
+      return matches;
+    });
+    console.log(`String matching resulted in ${filteredRides.length} matches out of ${rides.length} rides.`);
+    return filteredRides;
+  } else {
+    console.log("Place IDs provided, proceeding with Routes API matching:", { originPlaceId, destinationPlaceId });
+  }
+
+  const matchedRides = [];
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+
+  if (!apiKey) {
+    console.error("Google Maps API key is missing. Falling back to returning all filtered rides by date.");
+    return rides;
+  }
+
+  console.log("Using Routes API for precise matching with place IDs.");
+  for (const ride of rides) {
+    // Skip if place IDs are missing for the ride
+    if (!ride.origin_place_id || !ride.destination_place_id) {
+      console.log(`Skipping ride ${ride.id} due to missing place IDs.`);
+      continue;
+    }
+
+    try {
+      console.log(`Computing route for ride ${ride.id} with passenger waypoints.`);
+      // Use Routes API to check if rider's points fit driver's route
+      const response = await fetch(
+        `https://routes.googleapis.com/directions/v2:computeRoutes`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": "routes.duration,routes.distanceMeters",
+          },
+          body: JSON.stringify({
+            origin: { placeId: ride.origin_place_id },
+            destination: { placeId: ride.destination_place_id },
+            intermediates: [
+              { placeId: originPlaceId }, // Rider's pickup
+              { placeId: destinationPlaceId }, // Rider's drop-off
+            ],
+            travelMode: "DRIVE",
+            routingPreference: "TRAFFIC_AWARE",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        console.error(`Routes API error for ride ${ride.id}: ${response.status} - ${response.statusText}`);
+        continue;
+      }
+
+      const data = await response.json();
+      const route = data.routes[0];
+
+      if (!route) {
+        console.log(`No route found for ride ${ride.id} with passenger waypoints.`);
+        continue;
+      }
+
+      // Get baseline duration (driver's original route without rider)
+      console.log(`Computing baseline route for ride ${ride.id} without passenger waypoints.`);
+      const baselineResponse = await fetch(
+        `https://routes.googleapis.com/directions/v2:computeRoutes`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": "routes.duration",
+          },
+          body: JSON.stringify({
+            origin: { placeId: ride.origin_place_id },
+            destination: { placeId: ride.destination_place_id },
+            travelMode: "DRIVE",
+            routingPreference: "TRAFFIC_AWARE",
+          }),
+        }
+      );
+
+      if (!baselineResponse.ok) {
+        console.error(`Baseline Routes API error for ride ${ride.id}: ${baselineResponse.status} - ${baselineResponse.statusText}`);
+        continue;
+      }
+
+      const baselineData = await baselineResponse.json();
+      const baselineRoute = baselineData.routes[0];
+
+      if (!baselineRoute) {
+        console.log(`No baseline route found for ride ${ride.id}.`);
+        continue;
+      }
+
+      // Calculate detour time
+      const detourSeconds = parseInt(route.duration.replace("s", "")) - parseInt(baselineRoute.duration.replace("s", ""));
+      const maxDetourSeconds = 900; // 15 minutes
+      console.log(`Detour for ride ${ride.id}: ${detourSeconds} seconds (max allowed: ${maxDetourSeconds} seconds).`);
+
+      if (detourSeconds <= maxDetourSeconds) {
+        console.log(`Ride ${ride.id} matches with acceptable detour of ${detourSeconds} seconds.`);
+        matchedRides.push({
+          ...ride,
+          detourDuration: detourSeconds,
+          totalDuration: parseInt(route.duration.replace("s", "")),
+          totalDistance: route.distanceMeters,
+        });
+      } else {
+        console.log(`Ride ${ride.id} excluded due to excessive detour of ${detourSeconds} seconds.`);
+      }
+    } catch (error) {
+      console.error(`Error processing ride ${ride.id}:`, error);
+      continue;
+    }
+  }
+
+  console.log(`Route matching completed. Found ${matchedRides.length} matching rides out of ${rides.length} candidates.`);
+  return matchedRides;
 }
 
 export async function createRide(formData: FormData) {
@@ -186,7 +341,7 @@ export async function createRide(formData: FormData) {
     // Prepare ride data with new fields
     const rideData = {
       driver_id: user.id,
-      origin: origin,
+      departure_location: origin, // Use departure_location for the required field
       destination: destination,
       departure_time: departureTime,
       estimated_arrival_time: estimatedArrivalTime,
@@ -207,7 +362,11 @@ export async function createRide(formData: FormData) {
 
     console.log("Inserting ride data:", rideData)
 
-    const { data: ride, error } = await supabaseAdmin!.from("rides").insert(rideData).select().single()
+    if (!supabaseAdmin) {
+      return { error: "Database connection not available" }
+    }
+
+    const { data: ride, error } = await supabaseAdmin.from("rides").insert(rideData).select().single()
 
     if (error) {
       console.error("Error creating ride:", error)
@@ -229,6 +388,11 @@ export async function createRide(formData: FormData) {
 }
 
 export async function getRideById(id: string) {
+  if (!supabaseAdmin) {
+    console.error("Supabase admin client not available")
+    return null
+  }
+
   const { data: ride, error } = await supabaseAdmin
     .from("rides")
     .select(`
@@ -245,6 +409,7 @@ export async function getRideById(id: string) {
 
   return {
     ...ride,
+    origin: ride.departure_location,
     driver: ride.profiles,
   }
 }
@@ -253,6 +418,11 @@ export async function getUserRides() {
   const user = await getCurrentUser()
 
   if (!user) {
+    return []
+  }
+
+  if (!supabaseAdmin) {
+    console.error("Supabase admin client not available")
     return []
   }
 
@@ -277,6 +447,11 @@ export async function getUserBookings() {
   const user = await getCurrentUser()
 
   if (!user) {
+    return []
+  }
+
+  if (!supabaseAdmin) {
+    console.error("Supabase admin client not available")
     return []
   }
 
