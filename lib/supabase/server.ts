@@ -1,10 +1,10 @@
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
-import type { Database } from "../database.types"
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import type { Database } from "../database.types";
 
 export async function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
@@ -12,47 +12,53 @@ export async function createClient() {
       - NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? "✓" : "✗"}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? "✓" : "✗"}
       
-      Please check your environment variables in Vercel dashboard.`,
-    )
+      Please check your environment variables in Vercel dashboard.`
+    );
   }
 
-  const cookieStore = await cookies()
+  const cookieStore = await cookies();
 
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
-        return cookieStore.getAll()
+        return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
         } catch {
           // The `setAll` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing
-          // user sessions.
+          // This can be ignored if(Update `server.ts`: you have middleware refreshing user sessions.
         }
       },
     },
-  })
+  });
 }
 
 // Export createServerClient as a named export for compatibility
-export { createServerClient } from "@supabase/ssr"
+export { createServerClient } from "@supabase/ssr";
 
 // For admin operations
 export const supabaseAdmin = (() => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.warn("Admin Supabase client not available - missing environment variables")
-    return null
+    throw new Error(
+      `Missing Supabase admin environment variables:
+      - NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? "✓" : "✗"}
+      - SUPABASE_SERVICE_ROLE_KEY: ${supabaseServiceKey ? "✓" : "✗"}
+      
+      Please check your environment variables in Vercel dashboard.`
+    );
   }
 
   return createServerClient<Database>(supabaseUrl, supabaseServiceKey, {
     cookies: {
       getAll() {
-        return []
+        return [];
       },
       setAll() {
         // Admin client doesn't need cookies
@@ -62,5 +68,5 @@ export const supabaseAdmin = (() => {
       autoRefreshToken: false,
       persistSession: false,
     },
-  })
-})()
+  });
+})();

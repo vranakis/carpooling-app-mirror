@@ -33,54 +33,85 @@ export async function loadGoogleMaps(
 
     const attemptLoad = async () => {
       try {
-        const existingScript = document.querySelector(
-          'script[src*="maps.googleapis.com"]'
-        );
-        if (existingScript) {
-          const checkLoaded = () => {
-            if (window.google?.maps?.places && window.google?.maps?.geometry) {
-              isLoaded = true;
-              isLoading = false;
-              loadCallbacks.forEach((callback) => callback());
-              loadCallbacks.length = 0;
-              resolve();
-            } else {
-              setTimeout(checkLoaded, 100);
-            }
-          };
-          checkLoaded();
-          return;
+        // Only attempt to access document if running in browser environment
+        if (typeof window !== 'undefined') {
+          const existingScript = document.querySelector(
+            'script[src*="maps.googleapis.com"]'
+          );
+          if (existingScript) {
+            const checkLoaded = () => {
+              if (window.google?.maps?.places && window.google?.maps?.geometry) {
+                isLoaded = true;
+                isLoading = false;
+                loadCallbacks.forEach((callback) => callback());
+                loadCallbacks.length = 0;
+                resolve();
+              } else {
+                setTimeout(checkLoaded, 100);
+              }
+            };
+            checkLoaded();
+            return;
+          }
         }
 
         // Corrected import path to point to lib/actions/google-maps.ts
         const { getGoogleMapsApiKey } = await import("./actions/google-maps");
         const apiKey = await getGoogleMapsApiKey();
-        const script = document.createElement("script");
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&loading=async`;
-        script.async = true;
+        
+        // Only create and append script if in browser environment
+        if (typeof window !== 'undefined') {
+          const script = document.createElement("script");
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&loading=async`;
+          script.async = true;
 
-        script.onload = () => {
-          console.log("Google Maps script loaded successfully");
-          const checkReady = () => {
-            if (window.google?.maps?.places && window.google?.maps?.geometry) {
-              console.log("Google Maps API fully initialized");
-              isLoaded = true;
-              isLoading = false;
-              loadCallbacks.forEach((callback) => callback());
-              loadCallbacks.length = 0;
-              resolve();
+          script.onload = () => {
+            console.log("Google Maps script loaded successfully");
+            const checkReady = () => {
+              if (window.google?.maps?.places && window.google?.maps?.geometry) {
+                console.log("Google Maps API fully initialized");
+                isLoaded = true;
+                isLoading = false;
+                loadCallbacks.forEach((callback) => callback());
+                loadCallbacks.length = 0;
+                resolve();
+              } else {
+                console.log("Waiting for Google Maps API to initialize...");
+                setTimeout(checkReady, 50);
+              }
+            };
+            checkReady();
+          };
+
+          script.onerror = () => {
+            if (retries < maxRetries) {
+              console.warn(
+                `Google Maps script load failed, retrying (${
+                  retries + 1
+                }/${maxRetries})...`
+              );
+              retries++;
+              setTimeout(attemptLoad, retryDelay);
             } else {
-              console.log("Waiting for Google Maps API to initialize...");
-              setTimeout(checkReady, 50);
+              const error = new Error(
+                "Failed to load Google Maps script after retries"
+              );
+              console.error("Google Maps script loading failed:", error);
+              isLoading = false;
+              loadPromise = null;
+              errorCallbacks.forEach((callback) => callback(error));
+              errorCallbacks.length = 0;
+              reject(error);
             }
           };
-          checkReady();
-        };
 
-        script.onerror = () => {
+          document.head.appendChild(script);
+        } else {
+          // If not in browser environment, we can't load Google Maps
+          // Retry after delay in case component mounts on client side
           if (retries < maxRetries) {
             console.warn(
-              `Google Maps script load failed, retrying (${
+              `Google Maps initialization not possible on server, retrying (${
                 retries + 1
               }/${maxRetries})...`
             );
@@ -88,18 +119,16 @@ export async function loadGoogleMaps(
             setTimeout(attemptLoad, retryDelay);
           } else {
             const error = new Error(
-              "Failed to load Google Maps script after retries"
+              "Cannot load Google Maps on server-side after retries"
             );
-            console.error("Google Maps script loading failed:", error);
+            console.error("Google Maps initialization failed on server:", error);
             isLoading = false;
             loadPromise = null;
             errorCallbacks.forEach((callback) => callback(error));
             errorCallbacks.length = 0;
             reject(error);
           }
-        };
-
-        document.head.appendChild(script);
+        }
       } catch (error) {
         if (retries < maxRetries) {
           console.warn(
