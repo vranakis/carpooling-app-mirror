@@ -36,20 +36,6 @@ export default async function HomePage() {
         </p>
       </div>
 
-      {/* Temporary Notice */}
-      <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h3 className="font-semibold text-blue-800 mb-2">
-          🧪 Testing Mode - No Authentication
-        </h3>
-        <p className="text-sm text-blue-600">
-          We're testing the database connection. Authentication will be added
-          with Clerk soon!
-        </p>
-        <p className="text-sm text-blue-600 mt-2">
-          ✅ Database: Connected to Neon PostgreSQL
-        </p>
-      </div>
-
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>

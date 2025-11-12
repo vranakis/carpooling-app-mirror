@@ -28,6 +28,8 @@ export function RouteMap({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const polylineRef = useRef<google.maps.Polyline | null>(null);
+  const originMarkerRef = useRef<google.maps.Marker | null>(null);
+  const destinationMarkerRef = useRef<google.maps.Marker | null>(null);
   const [isMapLoading, setIsMapLoading] = useState(true);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +158,14 @@ export function RouteMap({
             polylineRef.current.setMap(null);
           }
 
+          // Clear previous markers
+          if (originMarkerRef.current) {
+            originMarkerRef.current.setMap(null);
+          }
+          if (destinationMarkerRef.current) {
+            destinationMarkerRef.current.setMap(null);
+          }
+
           // Decode polyline and render on map
           const decodedPath = google.maps.geometry.encoding.decodePath(
             routeInfo.polyline
@@ -168,16 +178,27 @@ export function RouteMap({
             map: mapRef.current,
           });
 
-          // Add markers for origin and destination using AdvancedMarkerElement
-          new google.maps.marker.AdvancedMarkerElement({
+          // Add markers for origin and destination using classic Marker API
+          originMarkerRef.current = new google.maps.Marker({
             position: originMemo.coordinates,
             map: mapRef.current,
             title: originMemo.address,
+            label: {
+              text: "A",
+              color: "white",
+              fontWeight: "bold",
+            },
           });
-          new google.maps.marker.AdvancedMarkerElement({
+
+          destinationMarkerRef.current = new google.maps.Marker({
             position: destinationMemo.coordinates,
             map: mapRef.current,
             title: destinationMemo.address,
+            label: {
+              text: "B",
+              color: "white",
+              fontWeight: "bold",
+            },
           });
 
           // Fit map to bounds
@@ -219,7 +240,7 @@ export function RouteMap({
       setIsMapLoading(true);
       try {
         // Check if Google Maps API is already loaded
-        if (typeof window !== 'undefined' && window.google?.maps) {
+        if (typeof window !== "undefined" && window.google?.maps) {
           console.log("Google Maps API already loaded, skipping load attempt.");
         } else {
           await loadGoogleMaps();

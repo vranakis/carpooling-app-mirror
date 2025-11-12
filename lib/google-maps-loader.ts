@@ -34,13 +34,16 @@ export async function loadGoogleMaps(
     const attemptLoad = async () => {
       try {
         // Only attempt to access document if running in browser environment
-        if (typeof window !== 'undefined') {
+        if (typeof window !== "undefined") {
           const existingScript = document.querySelector(
             'script[src*="maps.googleapis.com"]'
           );
           if (existingScript) {
             const checkLoaded = () => {
-              if (window.google?.maps?.places && window.google?.maps?.geometry) {
+              if (
+                window.google?.maps?.places &&
+                window.google?.maps?.geometry
+              ) {
                 isLoaded = true;
                 isLoading = false;
                 loadCallbacks.forEach((callback) => callback());
@@ -58,17 +61,20 @@ export async function loadGoogleMaps(
         // Corrected import path to point to lib/actions/google-maps.ts
         const { getGoogleMapsApiKey } = await import("./actions/google-maps");
         const apiKey = await getGoogleMapsApiKey();
-        
+
         // Only create and append script if in browser environment
-        if (typeof window !== 'undefined') {
+        if (typeof window !== "undefined") {
           const script = document.createElement("script");
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&loading=async`;
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry,marker&loading=async`;
           script.async = true;
 
           script.onload = () => {
             console.log("Google Maps script loaded successfully");
             const checkReady = () => {
-              if (window.google?.maps?.places && window.google?.maps?.geometry) {
+              if (
+                window.google?.maps?.places &&
+                window.google?.maps?.geometry
+              ) {
                 console.log("Google Maps API fully initialized");
                 isLoaded = true;
                 isLoading = false;
