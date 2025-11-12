@@ -1,5 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+// app/page.tsx
+// Temporary homepage - no authentication required
+// TODO: Add authentication with Clerk later
+"use client";
+
 import {
   Card,
   CardContent,
@@ -10,68 +13,53 @@ import {
 import { Button } from "@/components/ui/button";
 import { Car, Users, Leaf, MapPin, Clock, DollarSign } from "lucide-react";
 import Link from "next/link";
+import { getAllRides } from "@/lib/database/helpers";
 
 export default async function HomePage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // If no user, redirect to login
-  if (!user) {
-    redirect("/auth/login");
+  // Get recent rides from Neon database
+  let rides = [];
+  try {
+    rides = await getAllRides();
+  } catch (error) {
+    console.error("Error fetching rides:", error);
   }
-
-  // Get user profile
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  // Get some sample data for the dashboard
-  const { data: rides } = await supabase
-    .from("rides")
-    .select("*")
-    .limit(3)
-    .order("departure_time", { ascending: true });
 
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Welcome Section */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Welcome back, {profile?.first_name || user.email}!
+          Welcome to Carpooling App! 🚗
         </h1>
-        <p className="text-gray-200">
-          Ready to share a ride and reduce your carbon footprint?
+        <p className="text-gray-600">
+          Share rides, save money, and reduce your carbon footprint
         </p>
       </div>
 
-      {/* Debug Info - Remove in production */}
-      <div className="mb-8 p-4 bg-grey-300 rounded-lg">
-        <h3 className="font-semibold text-blue-200 mb-2">
-          Session Debug Info:
+      {/* Temporary Notice */}
+      <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h3 className="font-semibold text-blue-800 mb-2">
+          🧪 Testing Mode - No Authentication
         </h3>
-        <p className="text-sm text-blue-150">User ID: {user.id}</p>
-        <p className="text-sm text-blue-150">Email: {user.email}</p>
-        <p className="text-sm text-blue-150">
-          Profile: {profile?.first_name} {profile?.last_name}
+        <p className="text-sm text-blue-600">
+          We're testing the database connection. Authentication will be added
+          with Clerk soon!
         </p>
-        <p className="text-sm text-blue-150">Session Active: ✅</p>
+        <p className="text-sm text-blue-600 mt-2">
+          ✅ Database: Connected to Neon PostgreSQL
+        </p>
       </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 ">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Find a Ride</CardTitle>
             <Car className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <Link href="/search" className=" dark:bg-gray-800">
-              <Button className="w-full dark:bg-emerald-600 dark:text-white">
+            <Link href="/search">
+              <Button className="w-full bg-emerald-600 text-white hover:bg-emerald-700">
                 Search Rides
               </Button>
             </Link>
@@ -85,7 +73,7 @@ export default async function HomePage() {
           </CardHeader>
           <CardContent>
             <Link href="/offer-ride">
-              <Button className="w-full dark:bg-gray-800" variant="outline">
+              <Button className="w-full" variant="outline">
                 Create Ride
               </Button>
             </Link>
@@ -94,13 +82,13 @@ export default async function HomePage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Rides</CardTitle>
+            <CardTitle className="text-sm font-medium">Test Database</CardTitle>
             <MapPin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <Link href="/my-rides">
-              <Button className="w-full dark:bg-gray-800" variant="outline">
-                View Rides
+            <Link href="/api/test-db">
+              <Button className="w-full" variant="outline">
+                Test Connection
               </Button>
             </Link>
           </CardContent>
@@ -113,7 +101,7 @@ export default async function HomePage() {
           </CardHeader>
           <CardContent>
             <Link href="/impact">
-              <Button className="w-full dark:bg-gray-800" variant="outline">
+              <Button className="w-full" variant="outline">
                 View Impact
               </Button>
             </Link>
@@ -124,46 +112,114 @@ export default async function HomePage() {
       {/* Recent Rides */}
       <Card>
         <CardHeader>
-          <CardTitle>Upcoming Rides</CardTitle>
-          <CardDescription>Recent rides available in your area</CardDescription>
+          <CardTitle>Available Rides</CardTitle>
+          <CardDescription>
+            Recent rides available - {rides.length} ride
+            {rides.length !== 1 ? "s" : ""} found
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {rides && rides.length > 0 ? (
             <div className="space-y-4">
-              {rides.map((ride) => (
+              {rides.slice(0, 5).map((ride) => (
                 <div
                   key={ride.id}
-                  className="dark:bg-grey-800 flex items-center justify-between p-4 border rounded-lg"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  <div className="flex items-center space-x-4">
+                  <div className="flex-1 space-y-2">
                     <div className="flex items-center space-x-2">
                       <MapPin className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm">
-                        {ride.pickup_location} → {ride.destination}
+                      <span className="text-sm font-medium">
+                        {ride.origin} → {ride.destination}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm">
-                        {new Date(ride.departure_time).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm">${ride.price}</span>
+                    <div className="flex items-center space-x-4 text-sm text-gray-600">
+                      <div className="flex items-center space-x-1">
+                        <Clock className="h-3 w-3" />
+                        <span>
+                          {new Date(ride.departure_time).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Users className="h-3 w-3" />
+                        <span>{ride.available_seats} seats</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <DollarSign className="h-3 w-3" />
+                        <span>€{ride.price_per_seat}</span>
+                      </div>
                     </div>
                   </div>
                   <Link href={`/ride/${ride.id}`}>
-                    <Button size="sm">View Details</Button>
+                    <Button size="sm" className="ml-4">
+                      View Details
+                    </Button>
                   </Link>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-gray-500">No upcoming rides found.</p>
+            <div className="text-center py-8">
+              <p className="text-gray-500 mb-4">No rides available yet.</p>
+              <Link href="/api/rides/test">
+                <Button variant="outline">Create Test Ride</Button>
+              </Link>
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Quick Links */}
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">🧪 Test Endpoints</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Link href="/api/test-db" className="block">
+              <Button variant="ghost" className="w-full justify-start text-sm">
+                Database Connection Test
+              </Button>
+            </Link>
+            <Link href="/api/rides/test" className="block">
+              <Button variant="ghost" className="w-full justify-start text-sm">
+                Create Test Ride
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">📊 Database Info</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-1">
+            <p className="text-gray-600">Database: Neon PostgreSQL</p>
+            <p className="text-gray-600">Region: EU Central (Frankfurt)</p>
+            <p className="text-gray-600">Status: Connected ✅</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">🔜 Coming Soon</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-1">
+            <p className="text-gray-600">✅ Database setup complete</p>
+            <p className="text-gray-600">⏳ Authentication (Clerk)</p>
+            <p className="text-gray-600">⏳ Payment integration</p>
+            <p className="text-gray-600">⏳ Google Maps integration</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

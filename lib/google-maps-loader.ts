@@ -107,27 +107,16 @@ export async function loadGoogleMaps(
 
           document.head.appendChild(script);
         } else {
-          // If not in browser environment, we can't load Google Maps
-          // Retry after delay in case component mounts on client side
-          if (retries < maxRetries) {
-            console.warn(
-              `Google Maps initialization not possible on server, retrying (${
-                retries + 1
-              }/${maxRetries})...`
-            );
-            retries++;
-            setTimeout(attemptLoad, retryDelay);
-          } else {
-            const error = new Error(
-              "Cannot load Google Maps on server-side after retries"
-            );
-            console.error("Google Maps initialization failed on server:", error);
-            isLoading = false;
-            loadPromise = null;
-            errorCallbacks.forEach((callback) => callback(error));
-            errorCallbacks.length = 0;
-            reject(error);
-          }
+          // If not in browser environment, fail fast as we can't load Google Maps on server
+          const error = new Error(
+            "Cannot load Google Maps on server-side environment"
+          );
+          console.warn("Google Maps initialization not possible on server");
+          isLoading = false;
+          loadPromise = null;
+          errorCallbacks.forEach((callback) => callback(error));
+          errorCallbacks.length = 0;
+          reject(error);
         }
       } catch (error) {
         if (retries < maxRetries) {

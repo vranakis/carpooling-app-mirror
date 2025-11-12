@@ -1,234 +1,209 @@
-"use server"
+"use server";
 
-import { revalidatePath } from "next/cache"
-import { supabaseAdmin } from "../supabase/server"
-import { getCurrentUser } from "./auth"
+// lib/actions/bookings.ts
+// Booking operations using Neon database
+// TODO: Add authentication with Clerk later
+
+import { revalidatePath } from "next/cache";
+import {
+  createBooking as createBookingHelper,
+  getBookingsByPassenger,
+  getBookingsByRide,
+  updateBookingStatus as updateBookingStatusHelper,
+  getRideById,
+} from "@/lib/database/helpers";
+
+// ============================================
+// TEMPORARY: No authentication
+// These functions work without auth for testing
+// Will add Clerk authentication later
+// ============================================
 
 export async function bookRide(formData: FormData) {
-  const user = await getCurrentUser()
+  try {
+    // TODO: Get user from Clerk authentication
+    console.log("⚠️ bookRide: Authentication not implemented");
 
-  if (!user) {
-    return { error: "You must be logged in to book a ride" }
-  }
+    return {
+      error: "Authentication required. Please wait for Clerk integration.",
+    };
 
-  const rideId = formData.get("rideId") as string
-  const seatsBooked = Number.parseInt(formData.get("seatsBooked") as string)
+    /* WILL BE ENABLED WITH CLERK:
+    const { userId } = auth();
+    if (!userId) {
+      return { error: "You must be logged in to book a ride" };
+    }
 
-  // Check if ride exists and has enough seats
-  const { data: ride, error: rideError } = await supabaseAdmin
-    .from("rides")
-    .select("available_seats, driver_id")
-    .eq("id", rideId)
-    .single()
+    const rideId = formData.get("rideId") as string;
+    const seatsBooked = parseInt(formData.get("seatsBooked") as string);
 
-  if (rideError) {
-    return { error: "Ride not found" }
-  }
+    // Check if ride exists and has enough seats
+    const ride = await getRideById(rideId);
+    
+    if (!ride) {
+      return { error: "Ride not found" };
+    }
 
-  if (ride.driver_id === user.id) {
-    return { error: "You cannot book your own ride" }
-  }
+    if (ride.driver_id === userId) {
+      return { error: "You cannot book your own ride" };
+    }
 
-  if (ride.available_seats < seatsBooked) {
-    return { error: "Not enough seats available" }
-  }
+    if (ride.available_seats < seatsBooked) {
+      return { error: "Not enough seats available" };
+    }
 
-  // Create booking
-  const { data: booking, error: bookingError } = await supabaseAdmin
-    .from("bookings")
-    .insert({
+    // Create booking (the helper function will auto-decrease seats via trigger)
+    const booking = await createBookingHelper({
       ride_id: rideId,
-      passenger_id: user.id,
+      passenger_id: userId,
       seats_booked: seatsBooked,
-      status: "confirmed",
-    })
-    .select()
-    .single()
+      total_price: ride.price_per_seat * seatsBooked,
+    });
 
-  if (bookingError) {
-    return { error: bookingError.message }
+    revalidatePath(`/rides/${rideId}`);
+    return { success: true, booking };
+    */
+  } catch (error: any) {
+    console.error("Error booking ride:", error);
+    return { error: error.message || "Failed to book ride" };
   }
-
-  // Update available seats
-  const { error: updateError } = await supabaseAdmin
-    .from("rides")
-    .update({
-      available_seats: ride.available_seats - seatsBooked,
-    })
-    .eq("id", rideId)
-
-  if (updateError) {
-    return { error: updateError.message }
-  }
-
-  revalidatePath(`/ride/${rideId}`)
-  return { success: true, booking }
 }
 
 export async function getUserBookings() {
-  const user = await getCurrentUser()
+  try {
+    // TODO: Get user from Clerk and fetch their bookings
+    console.log("⚠️ getUserBookings: Authentication not implemented");
 
-  if (!user) {
-    return []
+    // For now, return empty array
+    // When Clerk is added:
+    // const { userId } = auth();
+    // if (!userId) return [];
+    // return await getBookingsByPassenger(userId);
+
+    return [];
+  } catch (error) {
+    console.error("Error fetching user bookings:", error);
+    return [];
   }
-
-  const { data: bookings, error } = await supabaseAdmin
-    .from("bookings")
-    .select(`
-      *,
-      ride:ride_id(
-        id,
-        origin,
-        destination,
-        departure_time,
-        estimated_arrival_time,
-        price,
-        driver:driver_id(id, first_name, last_name, avatar_url)
-      )
-    `)
-    .eq("passenger_id", user.id)
-    .order("created_at", { ascending: false })
-
-  if (error) {
-    console.error("Error fetching user bookings:", error)
-    return []
-  }
-
-  return bookings
 }
 
 export async function cancelBooking(id: string) {
-  const user = await getCurrentUser()
+  try {
+    // TODO: Get user from Clerk
+    console.log("⚠️ cancelBooking: Authentication not implemented");
 
-  if (!user) {
-    return { error: "You must be logged in to cancel a booking" }
+    return {
+      error: "Authentication required. Please wait for Clerk integration.",
+    };
+
+    /* WILL BE ENABLED WITH CLERK:
+    const { userId } = auth();
+    if (!userId) {
+      return { error: "You must be logged in to cancel a booking" };
+    }
+
+    // Update booking status to cancelled
+    // The trigger will automatically restore available seats
+    const updatedBooking = await updateBookingStatusHelper(id, 'cancelled');
+
+    revalidatePath("/my-bookings");
+    return { success: true };
+    */
+  } catch (error: any) {
+    console.error("Error cancelling booking:", error);
+    return { error: error.message || "Failed to cancel booking" };
   }
-
-  // Get booking details
-  const { data: booking, error: bookingError } = await supabaseAdmin
-    .from("bookings")
-    .select("ride_id, seats_booked, passenger_id")
-    .eq("id", id)
-    .single()
-
-  if (bookingError) {
-    return { error: "Booking not found" }
-  }
-
-  if (booking.passenger_id !== user.id) {
-    return { error: "You can only cancel your own bookings" }
-  }
-
-  // Get ride details
-  const { data: ride, error: rideError } = await supabaseAdmin
-    .from("rides")
-    .select("available_seats")
-    .eq("id", booking.ride_id)
-    .single()
-
-  if (rideError) {
-    return { error: "Ride not found" }
-  }
-
-  // Update booking status
-  const { error: updateBookingError } = await supabaseAdmin
-    .from("bookings")
-    .update({
-      status: "cancelled",
-    })
-    .eq("id", id)
-
-  if (updateBookingError) {
-    return { error: updateBookingError.message }
-  }
-
-  // Update available seats
-  const { error: updateRideError } = await supabaseAdmin
-    .from("rides")
-    .update({
-      available_seats: ride.available_seats + booking.seats_booked,
-    })
-    .eq("id", booking.ride_id)
-
-  if (updateRideError) {
-    return { error: updateRideError.message }
-  }
-
-  revalidatePath("/my-bookings")
-  return { success: true }
 }
 
-// Add the missing exports
 export async function createBooking(data: {
-  ride_id: string
-  passenger_id: string
-  seats_booked: number
-  status?: string
+  ride_id: string;
+  passenger_id: string;
+  seats_booked: number;
+  total_price: number;
+  status?: string;
 }) {
-  const { data: booking, error } = await supabaseAdmin
-    .from("bookings")
-    .insert({
+  try {
+    const booking = await createBookingHelper({
       ride_id: data.ride_id,
       passenger_id: data.passenger_id,
       seats_booked: data.seats_booked,
-      status: data.status || "confirmed",
-    })
-    .select()
-    .single()
+      total_price: data.total_price,
+    });
 
-  if (error) {
-    console.error("Error creating booking:", error)
-    return { error: error.message }
+    return { success: true, booking };
+  } catch (error: any) {
+    console.error("Error creating booking:", error);
+    return { error: error.message || "Failed to create booking" };
   }
-
-  return { success: true, booking }
 }
 
 export async function updateBookingStatus(id: string, status: string) {
-  const user = await getCurrentUser()
+  try {
+    // TODO: Get user from Clerk
+    console.log("⚠️ updateBookingStatus: Authentication not implemented");
 
-  if (!user) {
-    return { error: "You must be logged in to update a booking" }
+    return {
+      error: "Authentication required. Please wait for Clerk integration.",
+    };
+
+    /* WILL BE ENABLED WITH CLERK:
+    const { userId } = auth();
+    if (!userId) {
+      return { error: "You must be logged in to update a booking" };
+    }
+
+    // Validate status
+    const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed'];
+    if (!validStatuses.includes(status)) {
+      return { error: "Invalid status" };
+    }
+
+    // Update booking status
+    const updatedBooking = await updateBookingStatusHelper(id, status as any);
+
+    revalidatePath(`/bookings`);
+    return { success: true };
+    */
+  } catch (error: any) {
+    console.error("Error updating booking status:", error);
+    return { error: error.message || "Failed to update booking status" };
   }
-
-  // Get booking details
-  const { data: booking, error: bookingError } = await supabaseAdmin
-    .from("bookings")
-    .select("ride_id, passenger_id")
-    .eq("id", id)
-    .single()
-
-  if (bookingError) {
-    return { error: "Booking not found" }
-  }
-
-  // Check if user is the passenger or the driver of the ride
-  const { data: ride, error: rideError } = await supabaseAdmin
-    .from("rides")
-    .select("driver_id")
-    .eq("id", booking.ride_id)
-    .single()
-
-  if (rideError) {
-    return { error: "Ride not found" }
-  }
-
-  if (booking.passenger_id !== user.id && ride.driver_id !== user.id) {
-    return { error: "You can only update bookings you're involved in" }
-  }
-
-  // Update booking status
-  const { error: updateError } = await supabaseAdmin
-    .from("bookings")
-    .update({
-      status,
-    })
-    .eq("id", id)
-
-  if (updateError) {
-    return { error: updateError.message }
-  }
-
-  revalidatePath(`/ride/${booking.ride_id}`)
-  return { success: true }
 }
+
+// ============================================
+// ADMIN FUNCTIONS (for testing)
+// ============================================
+
+// For testing: Get all bookings for a specific ride
+export async function getRideBookings(rideId: string) {
+  try {
+    return await getBookingsByRide(rideId);
+  } catch (error) {
+    console.error("Error fetching ride bookings:", error);
+    return [];
+  }
+}
+
+// ============================================
+// NOTES FOR CLERK MIGRATION
+// ============================================
+
+/*
+When we add Clerk, uncomment the code blocks above and update imports:
+
+import { auth } from '@clerk/nextjs/server'
+
+Key Changes:
+1. Replace console.log warnings with actual auth checks
+2. Use auth().userId instead of temporary user IDs
+3. Uncomment the commented code blocks
+4. Test booking flow with real authentication
+
+The database triggers will handle:
+- Auto-decreasing available_seats when booking confirmed
+- Auto-increasing available_seats when booking cancelled
+- Preventing negative seats
+- Validating booking constraints
+
+So we don't need to manually update seats in the code!
+*/

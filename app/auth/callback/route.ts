@@ -1,30 +1,33 @@
-import { createClient } from "@/lib/supabase/server"
+// app/auth/callback/route.ts
+// ⚠️ TEMPORARILY DISABLED - Auth callback not needed without Supabase
+// TODO: Replace with Clerk callback when authentication is added
+
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+export async function GET(request: NextRequest) {
+  const { origin } = new URL(request.url);
+
+  // For now, just redirect to homepage
+  // When we add Clerk, this will handle OAuth callbacks
+  console.log("⚠️ Auth callback disabled - redirecting to homepage");
+
+  return NextResponse.redirect(`${origin}/`);
+}
+
+/*
+CLERK IMPLEMENTATION WILL BE:
+
+import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
-  const code = searchParams.get("code")
-  // if "next" is in param, use it as the redirect URL
   const next = searchParams.get("next") ?? "/"
-
-  if (code) {
-    const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
-      const forwardedHost = request.headers.get("x-forwarded-host") // original origin before load balancer
-      const isLocalEnv = process.env.NODE_ENV === "development"
-      if (isLocalEnv) {
-        // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-        return NextResponse.redirect(`${origin}${next}`)
-      } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`)
-      } else {
-        return NextResponse.redirect(`${origin}${next}`)
-      }
-    }
-  }
-
-  // return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/auth/error`)
+  
+  // Clerk handles the OAuth flow automatically
+  // Just redirect to the intended destination
+  return NextResponse.redirect(`${origin}${next}`)
 }
+*/

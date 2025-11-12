@@ -1,30 +1,45 @@
-import type { Metadata } from "next"
-import { getUserEnvironmentalImpact, getGlobalEnvironmentalImpact } from "@/lib/actions/environmental-impact"
-import { ImpactCard } from "@/components/impact/impact-card"
-import { ImpactChart } from "@/components/impact/impact-chart"
-import { Car, Leaf, Users, Route } from "lucide-react"
+"use client";
+
+import type { Metadata } from "next";
+import {
+  getUserEnvironmentalImpact,
+  getGlobalEnvironmentalImpact,
+} from "@/lib/actions/environmental-impact";
+import { ImpactCard } from "@/components/impact/impact-card";
+import { ImpactChart } from "@/components/impact/impact-chart";
+import { Car, Leaf, Users, Route } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Environmental Impact | Carpooling App",
-  description: "Track your positive impact on the environment through carpooling",
-}
+  description:
+    "Track your positive impact on the environment through carpooling",
+};
 
 export default async function ImpactPage() {
-  const { data: userImpact, error: userError } = await getUserEnvironmentalImpact()
-  const { data: globalImpact, error: globalError } = await getGlobalEnvironmentalImpact()
+  const { data: userImpact, error: userError } =
+    await getUserEnvironmentalImpact();
+  const { data: globalImpact, error: globalError } =
+    await getGlobalEnvironmentalImpact();
 
-  const hasError = userError || globalError
+  const hasError = userError || globalError;
 
   return (
     <div className="container py-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Environmental Impact</h1>
-        <p className="text-muted-foreground">Track your positive impact on the environment through carpooling</p>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Environmental Impact
+        </h1>
+        <p className="text-muted-foreground">
+          Track your positive impact on the environment through carpooling
+        </p>
       </div>
 
       {hasError ? (
         <div className="p-4 border rounded-md bg-red-50 text-red-800">
-          <p>There was an error loading your environmental impact data. Please try again later.</p>
+          <p>
+            There was an error loading your environmental impact data. Please
+            try again later.
+          </p>
           {userError && <p className="text-sm mt-2">Error: {userError}</p>}
           {globalError && <p className="text-sm mt-2">Error: {globalError}</p>}
         </div>
@@ -72,7 +87,9 @@ export default async function ImpactPage() {
           />
 
           <div className="mt-10">
-            <h2 className="text-2xl font-bold tracking-tight mb-4">Community Impact</h2>
+            <h2 className="text-2xl font-bold tracking-tight mb-4">
+              Community Impact
+            </h2>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <ImpactCard
                 title="Total CO2 Saved"
@@ -107,5 +124,5 @@ export default async function ImpactPage() {
         </>
       )}
     </div>
-  )
+  );
 }

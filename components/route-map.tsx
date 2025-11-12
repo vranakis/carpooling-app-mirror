@@ -65,73 +65,6 @@ export function RouteMap({
     fetchApiKey();
   }, []);
 
-  // Initialize map
-  useEffect(() => {
-    let isMounted = true;
-
-    const initialize = async () => {
-      console.log("Checking initialization status...", {
-        hasInitialized: hasInitialized.current,
-        isGoogleMapsLoaded: isGoogleMapsLoaded(),
-      });
-      if (
-        hasInitialized.current &&
-        isGoogleMapsLoaded() &&
-        mapContainerRef.current
-      ) {
-        console.log("Map already initialized, checking for route update...");
-        if (originMemo && destinationMemo) {
-          calculateAndDisplayRoute();
-        }
-        setIsMapLoading(false);
-        return;
-      }
-
-      console.log("Initiating map loading...");
-      setIsMapLoading(true);
-      try {
-        await loadGoogleMaps();
-        if (!isMounted) {
-          console.log("Component unmounted during map loading");
-          return;
-        }
-
-        // Wait for map container to be available
-        const waitForContainer = async (
-          retries = 5,
-          delay = 100
-        ): Promise<void> => {
-          if (mapContainerRef.current) {
-            initMap();
-            return;
-          }
-          if (retries === 0) {
-            throw new Error("Map container ref is null after retries");
-          }
-          console.log(`Waiting for map container, retries left: ${retries}`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          return waitForContainer(retries - 1, delay);
-        };
-
-        await waitForContainer();
-      } catch (err) {
-        console.error("Map initialization error:", err);
-        if (isMounted) {
-          setError(
-            err instanceof Error ? err.message : "Failed to initialize map"
-          );
-          setIsMapLoading(false);
-        }
-      }
-    };
-
-    initialize();
-    return () => {
-      isMounted = false;
-      console.log("Cleaning up map useEffect");
-    };
-  }, [originMemo, destinationMemo]);
-
   const initMap = useCallback(() => {
     if (!mapContainerRef.current) {
       console.error("Map container ref is null in initMap");
@@ -145,6 +78,7 @@ export function RouteMap({
       if (originMemo && destinationMemo) {
         calculateAndDisplayRoute();
       }
+      setIsMapLoading(false);
       return;
     }
 
@@ -234,13 +168,13 @@ export function RouteMap({
             map: mapRef.current,
           });
 
-          // Add markers for origin and destination
-          new google.maps.Marker({
+          // Add markers for origin and destination using AdvancedMarkerElement
+          new google.maps.marker.AdvancedMarkerElement({
             position: originMemo.coordinates,
             map: mapRef.current,
             title: originMemo.address,
           });
-          new google.maps.Marker({
+          new google.maps.marker.AdvancedMarkerElement({
             position: destinationMemo.coordinates,
             map: mapRef.current,
             title: destinationMemo.address,
@@ -275,6 +209,74 @@ export function RouteMap({
     }, 500),
     [originMemo, destinationMemo]
   );
+
+  // Initialize map once on component mount
+  useEffect(() => {
+    let isMounted = true;
+
+    const initialize = async () => {
+      console.log("Initiating map loading...");
+      setIsMapLoading(true);
+      try {
+        // Check if Google Maps API is already loaded
+        if (typeof window !== 'undefined' && window.google?.maps) {
+          console.log("Google Maps API already loaded, skipping load attempt.");
+        } else {
+          await loadGoogleMaps();
+        }
+        if (!isMounted) {
+          console.log("Component unmounted during map loading");
+          return;
+        }
+
+        // Wait for map container to be available
+        const waitForContainer = async (
+          retries = 5,
+          delay = 100
+        ): Promise<void> => {
+          if (mapContainerRef.current) {
+            initMap();
+            return;
+          }
+          if (retries === 0) {
+            throw new Error("Map container ref is null after retries");
+          }
+          console.log(`Waiting for map container, retries left: ${retries}`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return waitForContainer(retries - 1, delay);
+        };
+
+        await waitForContainer();
+      } catch (err) {
+        console.error("Map initialization error:", err);
+        if (isMounted) {
+          setError(
+            err instanceof Error ? err.message : "Failed to initialize map"
+          );
+          setIsMapLoading(false);
+        }
+      }
+    };
+
+    initialize();
+    return () => {
+      isMounted = false;
+      console.log("Cleaning up map useEffect");
+    };
+  }, [initMap]);
+
+  // Calculate and display route when origin or destination changes
+  useEffect(() => {
+    if (
+      hasInitialized.current &&
+      isGoogleMapsLoaded() &&
+      originMemo &&
+      destinationMemo
+    ) {
+      console.log("Origin or destination changed, recalculating route...");
+      calculateAndDisplayRoute();
+    }
+  }, [originMemo, destinationMemo, calculateAndDisplayRoute]);
 
   // Always render the map container
   return (

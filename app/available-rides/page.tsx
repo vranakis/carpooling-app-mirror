@@ -1,12 +1,14 @@
-import { getRides } from "@/lib/actions/rides"
-import { RideCard } from "@/components/ride-card"
-import { Button } from "@/components/ui/button"
-import { MapPin, Calendar, Search } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+"use client";
+
+import { getRides } from "@/lib/actions/rides";
+import { RideCard } from "@/components/ride-card";
+import { Button } from "@/components/ui/button";
+import { MapPin, Calendar, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default async function AvailableRidesPage() {
-  const { rides, error } = await getRides({ limit: 20 })
+  const { rides, error } = await getRides({ limit: 20 });
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -26,7 +28,11 @@ export default async function AvailableRidesPage() {
             <Label htmlFor="destination">To</Label>
             <div className="relative">
               <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input id="destination" placeholder="Destination city" className="pl-9" />
+              <Input
+                id="destination"
+                placeholder="Destination city"
+                className="pl-9"
+              />
             </div>
           </div>
 
@@ -63,9 +69,11 @@ export default async function AvailableRidesPage() {
       ) : (
         <div className="text-center py-12">
           <h3 className="text-lg font-medium">No rides available</h3>
-          <p className="text-muted-foreground mt-1">Try adjusting your search or check back later</p>
+          <p className="text-muted-foreground mt-1">
+            Try adjusting your search or check back later
+          </p>
         </div>
       )}
     </div>
-  )
+  );
 }

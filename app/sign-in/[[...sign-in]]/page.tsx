@@ -1,13 +1,8 @@
-"use client";
-
-// components/auth/login-form.tsx
-// Now properly using Clerk authentication
-
 import { SignIn } from "@clerk/nextjs";
 
-export function LoginForm() {
+export default function SignInPage() {
   return (
-    <div className="flex items-center justify-center w-full">
+    <div className="flex items-center justify-center min-h-screen py-12 bg-gray-50">
       <SignIn
         appearance={{
           elements: {
@@ -16,8 +11,8 @@ export function LoginForm() {
           },
         }}
         routing="path"
-        path="/auth/login"
-        signUpUrl="/auth/register"
+        path="/sign-in"
+        signUpUrl="/sign-up"
         afterSignInUrl="/my-rides"
         redirectUrl="/my-rides"
       />

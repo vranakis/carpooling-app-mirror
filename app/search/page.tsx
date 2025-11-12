@@ -3,11 +3,15 @@ import { RideCard } from "@/components/ride-card";
 import { Button } from "@/components/ui/button";
 import { SearchForm } from "@/components/search-form";
 
+// Force dynamic route to ensure searchParams are handled correctly
+export const dynamic = 'force-dynamic';
+
 export default async function SearchPage({
   searchParams,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
 }) {
+  // Ensure searchParams are accessed correctly for server components
   const origin =
     typeof searchParams.origin === "string" ? searchParams.origin : "";
   const destination =
