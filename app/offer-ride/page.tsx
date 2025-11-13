@@ -75,7 +75,7 @@ export default function OfferRidePage() {
       toast.success("Ride created successfully!");
 
       // Redirect to rides page or my-rides
-      router.push("/rides");
+      router.push("/my-rides?tab=offering");
     } catch (error: any) {
       console.error("Error submitting form:", error);
       toast.error(error.message || "Failed to create ride");

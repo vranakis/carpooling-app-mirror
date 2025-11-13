@@ -81,7 +81,7 @@ export default function HomePage() {
             <Car className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <Link href="/available-rides">
+            <Link href="/search">
               <Button className="w-full bg-emerald-600 text-white hover:bg-emerald-700">
                 Search Rides
               </Button>
@@ -105,13 +105,15 @@ export default function HomePage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Test Database</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">
+              Browse Available Rides
+            </CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <Link href="/test-rides">
+            <Link href="/available-rides">
               <Button className="w-full" variant="outline">
-                Test Rides
+                Browse Rides
               </Button>
             </Link>
           </CardContent>

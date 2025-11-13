@@ -4,6 +4,7 @@
 // Smart ride matching with dynamic route calculation
 
 import { revalidatePath } from "next/cache";
+import { auth } from "@clerk/nextjs/server";
 import {
   getAllRides,
   getRideById as getRideByIdHelper,
@@ -536,7 +537,15 @@ export async function getRides(
 
 export async function createRide(formData: FormData) {
   try {
-    console.log("⚠️ Creating ride without authentication");
+    // Get authenticated user from Clerk
+    const { userId } = await auth();
+
+    if (!userId) {
+      console.log("❌ User not authenticated - cannot create ride");
+      return { error: "You must be signed in to create a ride" };
+    }
+
+    console.log("✅ Creating ride for authenticated user:", userId);
 
     const origin = formData.get("origin") as string;
     const destination = formData.get("destination") as string;
@@ -567,10 +576,9 @@ export async function createRide(formData: FormData) {
       }
     }
 
-    const tempDriverId = "00000000-0000-0000-0000-000000000001";
-
+    // Use the authenticated user's ID as the driver
     const ride = await createRideHelper({
-      driver_id: tempDriverId,
+      driver_id: userId,
       origin,
       destination,
       origin_place_id: originPlaceId,
@@ -584,14 +592,20 @@ export async function createRide(formData: FormData) {
       price_per_seat: price,
     });
 
-    console.log("Ride created successfully:", ride.id);
+    console.log(
+      "✅ Ride created successfully:",
+      ride.id,
+      "for driver:",
+      userId
+    );
 
     revalidatePath("/");
     revalidatePath("/rides");
+    revalidatePath("/my-rides");
 
     return { success: true, ride };
   } catch (error: any) {
-    console.error("Unexpected error creating ride:", error);
+    console.error("❌ Error creating ride:", error);
     return { error: error.message || "Failed to create ride" };
   }
 }

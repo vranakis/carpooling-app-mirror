@@ -18,6 +18,7 @@ export default function MyRidesPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [rides, setRides] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -31,27 +32,39 @@ export default function MyRidesPage() {
         return;
       }
 
-      console.log("Fetching rides for user:", user.id);
+      setError(null); // Clear any previous errors
+      console.log("Fetching rides for authenticated user...");
 
       // Fetch user's rides (as driver)
-      const ridesResponse = await fetch(
-        `/api/rides/my-rides?userId=${user.id}`
-      );
+      // No need to pass userId - Clerk auth handles this server-side
+      const ridesResponse = await fetch("/api/rides/my-rides");
+
+      if (!ridesResponse.ok) {
+        const errorData = await ridesResponse.json();
+        throw new Error(errorData.error || "Failed to fetch rides");
+      }
+
       const ridesData = await ridesResponse.json();
 
-      console.log("Fetched rides:", ridesData);
-      setRides(ridesData.rides || []);
+      console.log("✅ Fetched rides:", ridesData);
+
+      if (ridesData.success) {
+        setRides(ridesData.rides || []);
+      } else {
+        throw new Error(ridesData.error || "Failed to fetch rides");
+      }
 
       // Fetch user's bookings (as passenger) - if you have this endpoint
-      // const bookingsResponse = await fetch(`/api/bookings/my-bookings?userId=${user.id}`)
+      // const bookingsResponse = await fetch('/api/bookings/my-bookings')
       // const bookingsData = await bookingsResponse.json()
       // setBookings(bookingsData.bookings || [])
 
       setBookings([]); // For now, empty bookings
       setLoading(false);
-    } catch (error) {
-      console.error("Error fetching rides data:", error);
-      toast.error("Failed to load rides data");
+    } catch (error: any) {
+      console.error("❌ Error fetching rides data:", error);
+      setError(error.message || "Failed to load rides data");
+      toast.error(error.message || "Failed to load rides data");
       setLoading(false);
     }
   };
@@ -60,16 +73,20 @@ export default function MyRidesPage() {
     if (isLoaded && user) {
       fetchData();
     } else if (isLoaded && !user) {
-      // User not authenticated, redirect will happen via middleware
-      setLoading(false);
+      // User not authenticated, redirect to sign-in
+      console.log("User not authenticated, redirecting to sign-in");
+      router.push("/sign-in");
     }
-  }, [user, isLoaded]);
+  }, [user, isLoaded, router]);
 
   const handleRefresh = async () => {
     try {
       setLoading(true);
+      setError(null);
       await fetchData();
-      toast.success("Rides updated!");
+      if (!error) {
+        toast.success("Rides updated!");
+      }
     } catch (error) {
       toast.error("Failed to refresh rides");
       console.error("Error refreshing rides:", error);
@@ -84,6 +101,28 @@ export default function MyRidesPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
             <span className="ml-3 text-gray-600">Loading your rides...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if there's an error
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="text-red-500 mb-4 text-lg">
+              ⚠️ Error Loading Rides
+            </div>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <Button
+              onClick={handleRefresh}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              Try Again
+            </Button>
           </div>
         </div>
       </div>
