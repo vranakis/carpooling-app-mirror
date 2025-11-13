@@ -9,3 +9,28 @@ This project is **NOT open source**.
 **Contributions are welcome via pull request**, but all code remains **property of Easy Rider Athens - Car Pooling**.
 
 © 2025 Easy Rider Athens - Car Pooling. All rights reserved.
+
+------------------------------------------------------------
+
+ALL RIGHTS RESERVED
+© 2025 Easy Rider Athens - Car Pooling
+
+This software and associated documentation files (the "Software") are
+proprietary and confidential. No license is granted to any person or
+entity under any circumstances.
+
+You are NOT permitted to:
+- Copy, modify, merge, publish, distribute, sublicense, or sell copies
+  of the Software.
+- Use the Software in any product, service, or application.
+- Remove or alter this notice.
+
+Contributions are welcome via pull requests, but all code, changes,
+and contributions remain the exclusive property of
+Easy Rider Athens - Car Pooling.
+
+Any unauthorized use, distribution, or reproduction of this Software
+constitutes copyright infringement and will be prosecuted to the
+fullest extent of the law.
+
+For licensing inquiries, contact: fvranakis@gmail.com
