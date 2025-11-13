@@ -1,12 +1,12 @@
 "use server";
 
 // lib/actions/rides.ts
-// Smart ride matching with dynamic route calculation
+// FIXED VERSION: Smart route matching + Clerk authentication
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
+import { queryNeon } from "@/lib/database/client";
 import {
-  getAllRides,
   getRideById as getRideByIdHelper,
   createRide as createRideHelper,
   getRidesByDriver,
@@ -21,19 +21,31 @@ import {
 // TYPES
 // ============================================
 
-interface RideWithMatch extends Awaited<ReturnType<typeof getRideByIdHelper>> {
-  // Original route (A → D)
+interface RideWithCoords {
+  id: string;
+  driver_id: string;
+  origin: string;
+  destination: string;
+  origin_place_id?: string;
+  destination_place_id?: string;
+  origin_lng?: number;
+  origin_lat?: number;
+  dest_lng?: number;
+  dest_lat?: number;
+  departure_time: string;
+  available_seats: number;
+  price_per_seat: number;
+  route_distance?: number;
+  route_duration?: number;
+  status: string;
+}
+
+interface RideWithMatch extends RideWithCoords {
   originalRoute?: RouteInfo;
-
-  // Route with passenger waypoints (A → B → C → D)
   detourRoute?: RouteInfo;
-
-  // Detour metrics
-  detourDistance?: number; // Extra km
-  detourTime?: number; // Extra minutes
-  detourPercentage?: number; // % increase
-
-  // Matched segment for passenger (B → C)
+  detourDistance?: number;
+  detourTime?: number;
+  detourPercentage?: number;
   passengerSegment?: RouteInfo;
 }
 
@@ -54,7 +66,6 @@ export async function searchRidesWithDetour(formData: FormData) {
     const destination = formData.get("destination")?.toString();
     const date = formData.get("date")?.toString();
 
-    // Get place details from form
     const originPlaceId = formData.get("originPlaceId")?.toString();
     const destinationPlaceId = formData.get("destinationPlaceId")?.toString();
     const originCoordinates = formData.get("originCoordinates")?.toString();
@@ -88,8 +99,15 @@ export async function searchRidesWithDetour(formData: FormData) {
       formattedAddress: destination,
     };
 
-    // Get all active rides
-    let rides = await getAllRides();
+    console.log("👤 Passenger route:", {
+      from: { ...passengerOrigin.coordinates, address: origin },
+      to: { ...passengerDestination.coordinates, address: destination },
+    });
+
+    // Get all active rides WITH coordinates explicitly extracted
+    let rides = await getAllRidesWithCoordinates();
+
+    console.log(`📊 Total rides in database: ${rides.length}`);
 
     // Filter by date if provided
     if (date) {
@@ -102,9 +120,9 @@ export async function searchRidesWithDetour(formData: FormData) {
         const rideDate = new Date(ride.departure_time);
         return rideDate >= searchDate && rideDate < nextDay;
       });
-    }
 
-    console.log(`📊 Checking ${rides.length} rides for matches...`);
+      console.log(`📅 After date filter: ${rides.length} rides`);
+    }
 
     // Check each ride for compatibility
     const matchedRides: RideWithMatch[] = [];
@@ -112,22 +130,14 @@ export async function searchRidesWithDetour(formData: FormData) {
     for (const ride of rides) {
       try {
         // Skip rides without coordinates
-        if (!ride.origin_coordinates || !ride.destination_coordinates) {
+        if (
+          !ride.origin_lat ||
+          !ride.origin_lng ||
+          !ride.dest_lat ||
+          !ride.dest_lng
+        ) {
           console.log(
             `⏭️  Skipping ride ${ride.id.slice(0, 8)} - missing coordinates`
-          );
-          continue;
-        }
-
-        // Parse ride coordinates
-        const rideOrigin = await parseCoordinates(ride.origin_coordinates);
-        const rideDestination = await parseCoordinates(
-          ride.destination_coordinates
-        );
-
-        if (!rideOrigin || !rideDestination) {
-          console.log(
-            `⏭️  Skipping ride ${ride.id.slice(0, 8)} - invalid coordinates`
           );
           continue;
         }
@@ -136,14 +146,14 @@ export async function searchRidesWithDetour(formData: FormData) {
         const rideOriginPlace: PlaceDetails = {
           placeId: ride.origin_place_id || "",
           address: ride.origin,
-          coordinates: rideOrigin,
+          coordinates: { lat: ride.origin_lat, lng: ride.origin_lng },
           formattedAddress: ride.origin,
         };
 
         const rideDestinationPlace: PlaceDetails = {
           placeId: ride.destination_place_id || "",
           address: ride.destination,
-          coordinates: rideDestination,
+          coordinates: { lat: ride.dest_lat, lng: ride.dest_lng },
           formattedAddress: ride.destination,
         };
 
@@ -151,6 +161,9 @@ export async function searchRidesWithDetour(formData: FormData) {
           `\n🚗 Analyzing ride ${ride.id.slice(0, 8)}: ${ride.origin} → ${
             ride.destination
           }`
+        );
+        console.log(
+          `   Coords: (${ride.origin_lat}, ${ride.origin_lng}) → (${ride.dest_lat}, ${ride.dest_lng})`
         );
 
         // Calculate if this ride is compatible
@@ -187,9 +200,50 @@ export async function searchRidesWithDetour(formData: FormData) {
     console.log(`\n🎯 Found ${matchedRides.length} compatible rides!`);
     return { success: true, rides: matchedRides };
   } catch (error: any) {
-    console.error("Error in smart search:", error);
+    console.error("❌ Error in smart search:", error);
     return { error: error.message || "Search failed" };
   }
+}
+
+// ============================================
+// GET RIDES WITH COORDINATES
+// ============================================
+
+async function getAllRidesWithCoordinates(): Promise<RideWithCoords[]> {
+  const rides = await queryNeon<RideWithCoords>(
+    `SELECT 
+      id, 
+      driver_id,
+      origin, 
+      destination,
+      origin_place_id,
+      destination_place_id,
+      ST_X(origin_coordinates::geometry) as origin_lng,
+      ST_Y(origin_coordinates::geometry) as origin_lat,
+      ST_X(destination_coordinates::geometry) as dest_lng,
+      ST_Y(destination_coordinates::geometry) as dest_lat,
+      departure_time,
+      available_seats,
+      price_per_seat,
+      route_distance,
+      route_duration,
+      status
+    FROM rides 
+    WHERE status = 'active'
+      AND origin_coordinates IS NOT NULL
+      AND destination_coordinates IS NOT NULL
+    ORDER BY departure_time DESC 
+    LIMIT 50`
+  );
+
+  console.log(`📍 Fetched ${rides.length} rides with coordinates`);
+  if (rides.length > 0) {
+    console.log(
+      `   Sample ride coords: lat=${rides[0].origin_lat}, lng=${rides[0].origin_lng}`
+    );
+  }
+
+  return rides;
 }
 
 // ============================================
@@ -227,8 +281,7 @@ async function calculateRideCompatibility(
       `  ✓ Original: ${originalRoute.distance} (${originalRoute.duration})`
     );
 
-    // Step 2: Check if passenger points are roughly between origin and destination
-    // Use a simple bounding box check first to eliminate obvious mismatches
+    // Step 2: Quick bounding box check
     if (
       !isPointInGeneralDirection(
         rideOrigin.coordinates,
@@ -325,7 +378,7 @@ async function calculateRideCompatibility(
       `  ✓ Passenger segment: ${passengerSegment.distance} (${passengerSegment.duration})`
     );
 
-    // Success! This is a compatible match
+    // Success!
     return {
       isCompatible: true,
       originalRoute,
@@ -342,7 +395,7 @@ async function calculateRideCompatibility(
 }
 
 // ============================================
-// HELPER: Calculate route with waypoints
+// HELPER FUNCTIONS
 // ============================================
 
 async function calculateRouteWithWaypoints(
@@ -351,24 +404,21 @@ async function calculateRouteWithWaypoints(
   destination: PlaceDetails
 ): Promise<RouteInfo | null> {
   try {
-    // For now, we'll calculate the total route by chaining segments
-    // A more sophisticated approach would use Google's waypoint optimization
-
     const segments: RouteInfo[] = [];
 
-    // Calculate A → B
+    // A → B
     const firstSegment = await calculateRoute(origin, waypoints[0]);
     if (!firstSegment) return null;
     segments.push(firstSegment);
 
-    // Calculate intermediate segments (B → C, if more waypoints)
+    // B → C (if multiple waypoints)
     for (let i = 0; i < waypoints.length - 1; i++) {
       const segment = await calculateRoute(waypoints[i], waypoints[i + 1]);
       if (!segment) return null;
       segments.push(segment);
     }
 
-    // Calculate last segment → D
+    // Last waypoint → D
     const lastSegment = await calculateRoute(
       waypoints[waypoints.length - 1],
       destination
@@ -376,7 +426,7 @@ async function calculateRouteWithWaypoints(
     if (!lastSegment) return null;
     segments.push(lastSegment);
 
-    // Sum up all segments
+    // Sum up segments
     const totalDistance = segments.reduce(
       (sum, seg) => sum + seg.distanceValue,
       0
@@ -386,7 +436,6 @@ async function calculateRouteWithWaypoints(
       0
     );
 
-    // Format nicely
     const distanceKm = totalDistance / 1000;
     const hours = Math.floor(totalDuration / 3600);
     const minutes = Math.floor((totalDuration % 3600) / 60);
@@ -397,7 +446,7 @@ async function calculateRouteWithWaypoints(
       duration: hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`,
       distanceValue: totalDistance,
       durationValue: totalDuration,
-      polyline: segments[0].polyline, // Use first segment's polyline for now
+      polyline: segments[0].polyline,
       bounds: segments[0].bounds,
     };
   } catch (error) {
@@ -406,17 +455,12 @@ async function calculateRouteWithWaypoints(
   }
 }
 
-// ============================================
-// HELPER: Check if point is in general direction
-// ============================================
-
 function isPointInGeneralDirection(
   origin: { lat: number; lng: number },
   destination: { lat: number; lng: number },
   point: { lat: number; lng: number }
 ): boolean {
-  // Create a bounding box around the origin-destination line with some margin
-  const minLat = Math.min(origin.lat, destination.lat) - 0.5; // ~55km margin
+  const minLat = Math.min(origin.lat, destination.lat) - 0.5;
   const maxLat = Math.max(origin.lat, destination.lat) + 0.5;
   const minLng = Math.min(origin.lng, destination.lng) - 0.5;
   const maxLng = Math.max(origin.lng, destination.lng) + 0.5;
@@ -430,50 +474,12 @@ function isPointInGeneralDirection(
 }
 
 // ============================================
-// HELPER: Parse PostGIS coordinates
-// ============================================
-
-async function parseCoordinates(
-  geom: any
-): Promise<{ lat: number; lng: number } | null> {
-  try {
-    // Handle different PostGIS geometry formats
-    if (typeof geom === "string") {
-      // Format: "POINT(lng lat)" or "(lng,lat)"
-      const matches =
-        geom.match(/\(([^,]+),([^)]+)\)/) ||
-        geom.match(/POINT\(([^ ]+) ([^)]+)\)/);
-      if (matches) {
-        return {
-          lng: parseFloat(matches[1]),
-          lat: parseFloat(matches[2]),
-        };
-      }
-    } else if (geom && typeof geom === "object") {
-      // GeoJSON format
-      if (geom.coordinates) {
-        return {
-          lng: geom.coordinates[0],
-          lat: geom.coordinates[1],
-        };
-      }
-    }
-
-    console.error("Could not parse coordinates:", geom);
-    return null;
-  } catch (error) {
-    console.error("Error parsing coordinates:", error);
-    return null;
-  }
-}
-
-// ============================================
 // EXISTING FUNCTIONS (kept for compatibility)
 // ============================================
 
 export async function getPopularRides() {
   try {
-    const rides = await getAllRides();
+    const rides = await getAllRidesWithCoordinates();
     return rides.slice(0, 5);
   } catch (error) {
     console.error("Error fetching popular rides:", error);
@@ -492,7 +498,7 @@ export async function getRides(
   } = {}
 ) {
   try {
-    let rides = await getAllRides();
+    let rides = await getAllRidesWithCoordinates();
 
     if (options.origin) {
       rides = rides.filter((ride) =>
@@ -622,8 +628,15 @@ export async function getRideById(id: string) {
 
 export async function getUserRides() {
   try {
-    console.log("⚠️ getUserRides: Authentication not implemented");
-    return [];
+    // Get authenticated user from Clerk
+    const { userId } = await auth();
+
+    if (!userId) {
+      console.log("⚠️ getUserRides: User not authenticated");
+      return [];
+    }
+
+    return await getRidesByDriver(userId);
   } catch (error) {
     console.error("Error fetching user rides:", error);
     return [];
@@ -632,7 +645,7 @@ export async function getUserRides() {
 
 export async function getUserBookings() {
   try {
-    console.log("⚠️ getUserBookings: Authentication not implemented");
+    console.log("⚠️ getUserBookings: Not yet implemented");
     return [];
   } catch (error) {
     console.error("Error fetching user bookings:", error);
