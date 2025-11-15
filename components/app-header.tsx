@@ -32,7 +32,7 @@ export default function AppHeader() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <Link href="/" className="text-xl font-bold text-emerald-600">
-                RideShare
+                Easy Rider Athens
               </Link>
             </div>
             <div className="animate-pulse">
@@ -50,8 +50,8 @@ export default function AppHeader() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <Link href="/" className="text-xl font-bold text-emerald-600">
-              RideShare
-            </Link>
+              Easy Rider - Athens
+            </Link> 
           </div>
 
           <div className="hidden md:flex items-center space-x-6">

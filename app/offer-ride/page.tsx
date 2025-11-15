@@ -304,7 +304,7 @@ export default function OfferRidePage() {
         <Button
           variant="outline"
           className="flex-1"
-          onClick={() => router.push("/rides")}
+          onClick={() => router.push("/available-rides")}
         >
           View All Rides
         </Button>

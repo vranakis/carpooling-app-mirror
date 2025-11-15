@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Easy Rider Athens</string>
+    <string name="title_activity_main">Easy Rider Athens</string>
+    <string name="package_name">gr.easyriderathens.app</string>
+    <string name="custom_url_scheme">gr.easyriderathens.app</string>
+</resources>

@@ -9,7 +9,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "RideShare - Sustainable Carpooling",
+  title: "Easy Rider Athens - Sustainable Carpooling",
   description: "Connect with others for eco-friendly rides",
   generator: "v0.dev",
 };

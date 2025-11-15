@@ -30,7 +30,7 @@ export default function VerifyPage() {
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-2">
             <Car className="h-8 w-8 text-emerald-500" />
-            <span className="font-bold text-2xl">RideShare</span>
+            <span className="font-bold text-2xl">Easy Rider Athens</span>
           </div>
         </div>
 
