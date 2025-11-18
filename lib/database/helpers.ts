@@ -147,19 +147,46 @@ export async function createRide(ride: {
 }
 
 export async function getRideById(rideId: string): Promise<Ride | null> {
-  return queryNeonSingle<Ride>("SELECT * FROM rides WHERE id = $1", [rideId]);
+  return queryNeonSingle<Ride>(
+    `SELECT 
+      id, driver_id, origin, destination, origin_place_id, destination_place_id,
+      ST_AsGeoJSON(origin_coordinates::geometry)::json as origin_coordinates,
+      ST_AsGeoJSON(destination_coordinates::geometry)::json as destination_coordinates,
+      departure_time, estimated_arrival_time, available_seats, price_per_seat,
+      route_distance, route_duration, route_polyline, status, created_at, updated_at
+    FROM rides 
+    WHERE id = $1`,
+    [rideId]
+  );
 }
 
 export async function getAllRides(): Promise<Ride[]> {
   return queryNeon<Ride>(
-    "SELECT * FROM rides WHERE status = $1 ORDER BY departure_time DESC LIMIT 50",
+    `SELECT 
+      id, driver_id, origin, destination, origin_place_id, destination_place_id,
+      ST_AsGeoJSON(origin_coordinates::geometry)::json as origin_coordinates,
+      ST_AsGeoJSON(destination_coordinates::geometry)::json as destination_coordinates,
+      departure_time, estimated_arrival_time, available_seats, price_per_seat,
+      route_distance, route_duration, route_polyline, status, created_at, updated_at
+    FROM rides 
+    WHERE status = $1 
+    ORDER BY departure_time DESC 
+    LIMIT 50`,
     ["active"]
   );
 }
 
 export async function getRidesByDriver(driverId: string): Promise<Ride[]> {
   return queryNeon<Ride>(
-    "SELECT * FROM rides WHERE driver_id = $1 ORDER BY departure_time DESC",
+    `SELECT 
+      id, driver_id, origin, destination, origin_place_id, destination_place_id,
+      ST_AsGeoJSON(origin_coordinates::geometry)::json as origin_coordinates,
+      ST_AsGeoJSON(destination_coordinates::geometry)::json as destination_coordinates,
+      departure_time, estimated_arrival_time, available_seats, price_per_seat,
+      route_distance, route_duration, route_polyline, status, created_at, updated_at
+    FROM rides 
+    WHERE driver_id = $1 
+    ORDER BY departure_time DESC`,
     [driverId]
   );
 }

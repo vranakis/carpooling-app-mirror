@@ -7,11 +7,13 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    unoptimized: true,
+    domains: ['img.clerk.com'],
   },
-  experimental: {images: {unoptimized: true}},
-  output:"export",
-  trailingSlash: true,
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
+  },
 }
 
 export default nextConfig

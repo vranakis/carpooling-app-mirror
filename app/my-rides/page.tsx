@@ -22,7 +22,7 @@ export default function MyRidesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Get the tab from URL params, default to "upcoming"
+  // Get the tab from URL params, default to "offering"
   const defaultTab = searchParams.get("tab") || "offering";
 
   const fetchData = async () => {
@@ -36,7 +36,6 @@ export default function MyRidesPage() {
       console.log("Fetching rides for authenticated user...");
 
       // Fetch user's rides (as driver)
-      // No need to pass userId - Clerk auth handles this server-side
       const ridesResponse = await fetch("/api/rides/my-rides");
 
       if (!ridesResponse.ok) {
@@ -49,15 +48,22 @@ export default function MyRidesPage() {
       console.log("✅ Fetched rides:", ridesData);
 
       if (ridesData.success) {
-        setRides(ridesData.rides || []);
+        const fetchedRides = ridesData.rides || [];
+        setRides(fetchedRides);
+
+        // Debug: Log each ride's status
+        console.log("📊 Ride statuses:");
+        fetchedRides.forEach((ride: any, index: number) => {
+          console.log(`  Ride ${index + 1}:`, {
+            id: ride.id.slice(0, 8),
+            status: ride.status,
+            departure: ride.departure_time,
+            isPast: isPast(new Date(ride.departure_time)),
+          });
+        });
       } else {
         throw new Error(ridesData.error || "Failed to fetch rides");
       }
-
-      // Fetch user's bookings (as passenger) - if you have this endpoint
-      // const bookingsResponse = await fetch('/api/bookings/my-bookings')
-      // const bookingsData = await bookingsResponse.json()
-      // setBookings(bookingsData.bookings || [])
 
       setBookings([]); // For now, empty bookings
       setLoading(false);
@@ -129,6 +135,7 @@ export default function MyRidesPage() {
     );
   }
 
+  // Filter rides - FIXED: Don't filter by status, just by time
   const upcomingBookings = bookings?.filter(
     (booking) =>
       booking.status !== "cancelled" &&
@@ -140,12 +147,20 @@ export default function MyRidesPage() {
       isPast(new Date(booking.ride?.departure_time))
   );
 
+  // FIXED: Only filter by time, not status (status might be null or different value)
   const upcomingRides = rides?.filter(
-    (ride) => !isPast(new Date(ride.departure_time)) && ride.status === "active"
+    (ride) => !isPast(new Date(ride.departure_time))
   );
-  const pastRides = rides?.filter(
-    (ride) => isPast(new Date(ride.departure_time)) || ride.status !== "active"
+  const pastRides = rides?.filter((ride) =>
+    isPast(new Date(ride.departure_time))
   );
+
+  // Debug logs
+  console.log("🔍 Filtering results:", {
+    totalRides: rides.length,
+    upcomingRides: upcomingRides.length,
+    pastRides: pastRides.length,
+  });
 
   return (
     <div className="container mx-auto px-4 py-6 pb-20 md:pb-6">
@@ -208,7 +223,9 @@ export default function MyRidesPage() {
                       <div className="font-medium">
                         {ride.origin} → {ride.destination}
                       </div>
-                      <Badge className="bg-emerald-500">Active</Badge>
+                      <Badge className="bg-emerald-500">
+                        {ride.status || "Active"}
+                      </Badge>
                     </div>
                     <div className="p-4">
                       <div className="flex items-start gap-4">
