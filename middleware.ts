@@ -13,29 +13,15 @@ const isProtectedRoute = createRouteMatcher([
   "/notifications(.*)",
 ]);
 
-// Define public routes that should never be protected
-const isPublicRoute = createRouteMatcher([
-  "/",
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/api(.*)",
-  "/rides(.*)",
-  "/search(.*)",
-  "/available-rides(.*)",
-  "/test-rides(.*)",
-  "/test-clerk(.*)",
-  "/impact(.*)",
-]);
-
 export default clerkMiddleware(async (auth, req) => {
-  // Don't protect public routes
-  if (isPublicRoute(req)) {
-    return;
-  }
+  console.log("🔒 Middleware checking:", req.nextUrl.pathname);
 
-  // Protect routes that require authentication
+  // Only protect specific routes that require authentication
   if (isProtectedRoute(req)) {
+    console.log("🔐 Protected route - checking auth");
     await auth.protect();
+  } else {
+    console.log("✅ Public route - no auth required");
   }
 });
 

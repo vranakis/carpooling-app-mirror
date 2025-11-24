@@ -161,19 +161,29 @@ export async function getRideById(rideId: string): Promise<Ride | null> {
 }
 
 export async function getAllRides(): Promise<Ride[]> {
-  return queryNeon<Ride>(
-    `SELECT 
-      id, driver_id, origin, destination, origin_place_id, destination_place_id,
-      ST_AsGeoJSON(origin_coordinates::geometry)::json as origin_coordinates,
-      ST_AsGeoJSON(destination_coordinates::geometry)::json as destination_coordinates,
-      departure_time, estimated_arrival_time, available_seats, price_per_seat,
-      route_distance, route_duration, route_polyline, status, created_at, updated_at
-    FROM rides 
-    WHERE status = $1 
-    ORDER BY departure_time DESC 
-    LIMIT 50`,
-    ["active"]
-  );
+  console.log("🔍 getAllRides - Starting query...");
+  try {
+    const rides = await queryNeon<Ride>(
+      `SELECT 
+        id, driver_id, origin, destination, origin_place_id, destination_place_id,
+        ST_AsGeoJSON(origin_coordinates::geometry)::json as origin_coordinates,
+        ST_AsGeoJSON(destination_coordinates::geometry)::json as destination_coordinates,
+        departure_time, estimated_arrival_time, available_seats, price_per_seat,
+        route_distance, route_duration, route_polyline, status, created_at, updated_at
+      FROM rides 
+      WHERE status = $1 
+      ORDER BY departure_time DESC 
+      LIMIT 50`,
+      ["active"]
+    );
+    console.log(
+      `✅ getAllRides - Query successful, found ${rides.length} rides`
+    );
+    return rides;
+  } catch (error) {
+    console.error("❌ getAllRides - Query failed:", error);
+    throw error;
+  }
 }
 
 export async function getRidesByDriver(driverId: string): Promise<Ride[]> {

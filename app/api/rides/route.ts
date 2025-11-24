@@ -6,12 +6,12 @@ import { getAllRides } from "@/lib/database/helpers";
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("📋 Fetching all active rides...");
+    console.log("📋 API /api/rides - Fetching all active rides...");
 
     // Get all active rides from database
     const rides = await getAllRides();
 
-    console.log(`✅ Found ${rides.length} active rides`);
+    console.log(`✅ API /api/rides - Found ${rides.length} active rides`);
 
     return NextResponse.json({
       success: true,
@@ -19,12 +19,15 @@ export async function GET(request: NextRequest) {
       count: rides.length,
     });
   } catch (error: any) {
-    console.error("❌ Error fetching rides:", error);
+    console.error("❌ API /api/rides - Error fetching rides:", error);
+    console.error("❌ Error stack:", error.stack);
+    console.error("❌ Error details:", JSON.stringify(error, null, 2));
 
     return NextResponse.json(
       {
         success: false,
         error: error.message || "Failed to fetch rides",
+        errorDetails: error.toString(),
         rides: [],
       },
       { status: 500 }

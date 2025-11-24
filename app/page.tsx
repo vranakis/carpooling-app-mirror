@@ -1,6 +1,4 @@
-"use client";
-
-import { useState, useEffect } from "react";
+import { getAllRides } from "@/lib/database/helpers";
 import {
   Card,
   CardContent,
@@ -9,57 +7,23 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Car,
-  Users,
-  Leaf,
-  MapPin,
-  Clock,
-  DollarSign,
-  Loader2,
-} from "lucide-react";
+import { Car, Users, Leaf, MapPin, Clock, DollarSign } from "lucide-react";
 import Link from "next/link";
 
-interface Ride {
-  id: string;
-  origin: string;
-  destination: string;
-  departure_time: string;
-  available_seats: number;
-  price_per_seat: number;
-  status: string;
-}
+export default async function HomePage() {
+  console.log("🏠 Homepage - Server Component - Fetching rides...");
 
-export default function HomePage() {
-  const [rides, setRides] = useState<Ride[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Fetch rides server-side
+  let rides = [];
+  let error = null;
 
-  useEffect(() => {
-    fetchRides();
-  }, []);
-
-  const fetchRides = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/rides");
-      const data = await response.json();
-
-      if (data.success) {
-        setRides(data.rides || []);
-        console.log(`✅ Homepage: Loaded ${data.count} rides`);
-      } else {
-        setError(data.error || "Failed to load rides");
-      }
-    } catch (err: any) {
-      console.error("❌ Homepage: Error fetching rides:", err);
-      setError(err.message || "Failed to fetch rides");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  try {
+    rides = await getAllRides();
+    console.log(`✅ Homepage - Server - Loaded ${rides.length} rides`);
+  } catch (err: any) {
+    console.error("❌ Homepage - Server - Error:", err);
+    error = err.message;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -139,25 +103,17 @@ export default function HomePage() {
         <CardHeader>
           <CardTitle>Available Rides</CardTitle>
           <CardDescription>
-            {isLoading
-              ? "Loading rides..."
+            {error
+              ? "Error loading rides"
               : `Recent rides available - ${rides.length} ride${
                   rides.length !== 1 ? "s" : ""
                 } found`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-              <span className="ml-2 text-gray-600">Loading rides...</span>
-            </div>
-          ) : error ? (
+          {error ? (
             <div className="text-center py-8">
               <p className="text-red-500 mb-4">Error: {error}</p>
-              <Button onClick={fetchRides} variant="outline">
-                Try Again
-              </Button>
             </div>
           ) : rides && rides.length > 0 ? (
             <div className="space-y-4">
@@ -249,8 +205,7 @@ export default function HomePage() {
               Region: EU Central (Frankfurt)
             </p>
             <p className="text-gray-600 dark:text-gray-400">
-              Status:{" "}
-              {isLoading ? "Checking..." : error ? "Error ❌" : "Connected ✅"}
+              Status: {error ? "Error ❌" : "Connected ✅"}
             </p>
           </CardContent>
         </Card>
