@@ -452,16 +452,41 @@ function HowItWorksSection() {
           <strong>Our smart system:</strong> Finds drivers whose route overlaps
           with yours, even if they start or end elsewhere!
         </p>
+
+        <div className="bg-white rounded-lg p-4 mt-4 border-2 border-emerald-200">
+          <p className="font-semibold mb-3 text-emerald-900">
+            ⚙️ Current Matching Criteria:
+          </p>
+          <ul className="space-y-2 ml-4 list-none text-sm">
+            <li>
+              ⏱️ Maximum extra time for driver: <strong>10 minutes</strong>
+            </li>
+            <li>
+              📏 Maximum extra distance:{" "}
+              <strong>30 km or 20% of original route</strong>
+            </li>
+            <li>📍 Route must overlap with your journey</li>
+            <li>
+              🎯 Both pickup and dropoff must be on or near driver's route
+            </li>
+          </ul>
+          <p className="text-xs text-gray-600 mt-3 italic">
+            These limits ensure drivers don't make significant detours while
+            still maximizing ride opportunities.
+          </p>
+        </div>
+
         <div className="bg-white rounded-lg p-4 mt-4">
           <p className="font-semibold mb-2">Example:</p>
           <ul className="space-y-2 ml-4 list-none">
             <li>🚗 Driver: Athens → Thessaloniki (502 km)</li>
             <li>👤 You need: Larissa → Katerini (150 km)</li>
             <li>✅ Perfect match! Driver passes through both cities</li>
-            <li>📊 System calculates the small detour needed (~10-20%)</li>
+            <li>📊 System verifies detour is under 10 minutes</li>
             <li>💰 You only pay for your segment of the journey</li>
           </ul>
         </div>
+
         <Alert className="mt-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>

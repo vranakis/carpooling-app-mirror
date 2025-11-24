@@ -43,6 +43,8 @@ interface RideWithMatch extends Awaited<ReturnType<typeof getRideByIdHelper>> {
 
 const MAX_DETOUR_PERCENTAGE = 20; // Maximum 20% detour acceptable
 const MAX_DETOUR_KM = 30; // Or maximum 30km extra, whichever is less
+const MAX_DETOUR_TIME = 10; // Maximum 10 extra minutes for the driver
+const BOUNDING_BOX_MARGIN = 0.1; // ~11km margin (reduced from 0.5° = 55km)
 
 // ============================================
 // SMART SEARCH WITH DETOUR MATCHING
@@ -113,26 +115,36 @@ export async function searchRidesWithDetour(formData: FormData) {
 
     // Check each ride for compatibility
     const matchedRides: RideWithMatch[] = [];
+    let processedCount = 0;
+    let skippedNoCoords = 0;
+    let skippedBoundingBox = 0;
+    let rejectedByDetour = 0;
 
     for (const ride of rides) {
+      processedCount++;
+      console.log(`\n${"=".repeat(60)}`);
+      console.log(
+        `🔍 [${processedCount}/${rides.length}] Checking ride ${ride.id.slice(
+          0,
+          8
+        )}`
+      );
+      console.log(`   Route: ${ride.origin} → ${ride.destination}`);
+
       try {
-        console.log(`\n🔍 Checking ride ${ride.id.slice(0, 8)}: ${ride.origin} → ${ride.destination}`);
-        
         // Skip rides without coordinates
         if (!ride.origin_coordinates || !ride.destination_coordinates) {
-          console.log(
-            `⏭️  Skipping - missing coordinates`,
-            { 
-              hasOrigin: !!ride.origin_coordinates, 
-              hasDest: !!ride.destination_coordinates 
-            }
-          );
+          skippedNoCoords++;
+          console.log(`⏭️  Skipped: Missing coordinates`, {
+            hasOrigin: !!ride.origin_coordinates,
+            hasDest: !!ride.destination_coordinates,
+          });
           continue;
         }
 
         console.log(`  Raw coordinates:`, {
           origin: ride.origin_coordinates,
-          destination: ride.destination_coordinates
+          destination: ride.destination_coordinates,
         });
 
         // Parse ride coordinates
@@ -143,13 +155,11 @@ export async function searchRidesWithDetour(formData: FormData) {
 
         console.log(`  Parsed coordinates:`, {
           rideOrigin,
-          rideDestination
+          rideDestination,
         });
 
         if (!rideOrigin || !rideDestination) {
-          console.log(
-            `⏭️  Skipping - invalid coordinates after parsing`
-          );
+          console.log(`⏭️  Skipping - invalid coordinates after parsing`);
           continue;
         }
 
@@ -184,7 +194,7 @@ export async function searchRidesWithDetour(formData: FormData) {
 
         if (matchResult.isCompatible) {
           console.log(
-            `✅ MATCH! Detour: +${matchResult.detourDistance}km (+${matchResult.detourPercentage}%)`
+            `✅ MATCH! Detour: +${matchResult.detourDistance}km (+${matchResult.detourPercentage}%), +${matchResult.detourTime}min`
           );
 
           matchedRides.push({
@@ -197,15 +207,24 @@ export async function searchRidesWithDetour(formData: FormData) {
             passengerSegment: matchResult.passengerSegment,
           });
         } else {
+          rejectedByDetour++;
           console.log(`❌ No match: ${matchResult.reason}`);
         }
       } catch (error) {
-        console.error(`Error processing ride ${ride.id}:`, error);
+        console.error(`⚠️  Error processing ride ${ride.id}:`, error);
         continue;
       }
     }
 
-    console.log(`\n🎯 Found ${matchedRides.length} compatible rides!`);
+    console.log(`\n${"=".repeat(60)}`);
+    console.log(`📊 SEARCH SUMMARY:`);
+    console.log(`   Total rides checked: ${processedCount}`);
+    console.log(`   Skipped (no coords): ${skippedNoCoords}`);
+    console.log(`   Skipped (bounding box): ${skippedBoundingBox}`);
+    console.log(`   Rejected (detour limits): ${rejectedByDetour}`);
+    console.log(`   ✅ MATCHES FOUND: ${matchedRides.length}`);
+    console.log(`${"=".repeat(60)}\n`);
+
     return { success: true, rides: matchedRides };
   } catch (error: any) {
     console.error("Error in smart search:", error);
@@ -254,6 +273,7 @@ async function calculateRideCompatibility(
 
     // Step 2: Check if passenger points are roughly between origin and destination
     // Use a simple bounding box check first to eliminate obvious mismatches
+    console.log(`  🗺️  Checking pickup point bounding box...`);
     if (
       !isPointInGeneralDirection(
         rideOrigin.coordinates,
@@ -263,10 +283,11 @@ async function calculateRideCompatibility(
     ) {
       return {
         isCompatible: false,
-        reason: "Pickup point not in route direction",
+        reason: "Pickup point not in route direction (bounding box check)",
       };
     }
 
+    console.log(`  🗺️  Checking dropoff point bounding box...`);
     if (
       !isPointInGeneralDirection(
         rideOrigin.coordinates,
@@ -276,9 +297,11 @@ async function calculateRideCompatibility(
     ) {
       return {
         isCompatible: false,
-        reason: "Dropoff point not in route direction",
+        reason: "Dropoff point not in route direction (bounding box check)",
       };
     }
+
+    console.log(`  ✅ Both points passed bounding box check`);
 
     // Step 3: Calculate route with passenger waypoints (A → B → C → D)
     console.log("  📍 Calculating route with waypoints...");
@@ -313,8 +336,29 @@ async function calculateRideCompatibility(
       )}%), +${detourMinutes.toFixed(0)}min`
     );
 
-    // Step 5: Check if detour is acceptable
+    // Step 5: Check if detour is acceptable (ALL conditions must pass)
+
+    // Check time limit first (most important for driver)
+    if (detourMinutes > MAX_DETOUR_TIME) {
+      console.log(
+        `  ❌ Rejected: Detour time ${detourMinutes.toFixed(
+          0
+        )}min exceeds ${MAX_DETOUR_TIME}min limit`
+      );
+      return {
+        isCompatible: false,
+        reason: `Detour time too long: ${detourMinutes.toFixed(
+          0
+        )}min (max ${MAX_DETOUR_TIME}min)`,
+      };
+    }
+
     if (detourPercentage > MAX_DETOUR_PERCENTAGE) {
+      console.log(
+        `  ❌ Rejected: Detour ${detourPercentage.toFixed(
+          1
+        )}% exceeds ${MAX_DETOUR_PERCENTAGE}% limit`
+      );
       return {
         isCompatible: false,
         reason: `Detour too large: ${detourPercentage.toFixed(
@@ -324,6 +368,11 @@ async function calculateRideCompatibility(
     }
 
     if (detourKm > MAX_DETOUR_KM) {
+      console.log(
+        `  ❌ Rejected: Detour ${detourKm.toFixed(
+          1
+        )}km exceeds ${MAX_DETOUR_KM}km limit`
+      );
       return {
         isCompatible: false,
         reason: `Detour too large: ${detourKm.toFixed(
@@ -331,6 +380,8 @@ async function calculateRideCompatibility(
         )}km (max ${MAX_DETOUR_KM}km)`,
       };
     }
+
+    console.log(`  ✅ All detour checks passed!`);
 
     // Step 6: Calculate passenger segment (B → C)
     console.log("  📍 Calculating passenger segment...");
@@ -448,18 +499,26 @@ function isPointInGeneralDirection(
   destination: { lat: number; lng: number },
   point: { lat: number; lng: number }
 ): boolean {
-  // Create a bounding box around the origin-destination line with some margin
-  const minLat = Math.min(origin.lat, destination.lat) - 0.5; // ~55km margin
-  const maxLat = Math.max(origin.lat, destination.lat) + 0.5;
-  const minLng = Math.min(origin.lng, destination.lng) - 0.5;
-  const maxLng = Math.max(origin.lng, destination.lng) + 0.5;
+  // Create a bounding box around the origin-destination line with margin
+  const minLat = Math.min(origin.lat, destination.lat) - BOUNDING_BOX_MARGIN;
+  const maxLat = Math.max(origin.lat, destination.lat) + BOUNDING_BOX_MARGIN;
+  const minLng = Math.min(origin.lng, destination.lng) - BOUNDING_BOX_MARGIN;
+  const maxLng = Math.max(origin.lng, destination.lng) + BOUNDING_BOX_MARGIN;
 
-  return (
+  const isInBox =
     point.lat >= minLat &&
     point.lat <= maxLat &&
     point.lng >= minLng &&
-    point.lng <= maxLng
-  );
+    point.lng <= maxLng;
+
+  console.log(`    🗺️  Bounding box check: ${isInBox ? "PASS" : "FAIL"}`, {
+    point: `(${point.lat.toFixed(3)}, ${point.lng.toFixed(3)})`,
+    box: `lat: ${minLat.toFixed(2)} to ${maxLat.toFixed(
+      2
+    )}, lng: ${minLng.toFixed(2)} to ${maxLng.toFixed(2)}`,
+  });
+
+  return isInBox;
 }
 
 // ============================================
@@ -475,7 +534,7 @@ async function parseCoordinates(
 ): Promise<{ lat: number; lng: number } | null> {
   try {
     console.log(`    🔧 parseCoordinates input:`, typeof geom, geom);
-    
+
     // Handle different PostGIS geometry formats
     if (typeof geom === "string") {
       console.log(`    → Parsing as string`);
@@ -524,21 +583,25 @@ export async function createRide(formData: FormData) {
   try {
     // Get authenticated user from Clerk
     let userId: string | null = null;
-    
+
     try {
       const authResult = await auth();
       userId = authResult.userId;
     } catch (authError: any) {
       console.error("❌ Auth error details:", authError);
-      return { 
-        error: "Authentication error. Please make sure you're signed in and Clerk is properly configured.",
-        details: authError.message 
+      return {
+        error:
+          "Authentication error. Please make sure you're signed in and Clerk is properly configured.",
+        details: authError.message,
       };
     }
 
     if (!userId) {
       console.log("❌ User not authenticated - cannot create ride");
-      return { error: "You must be signed in to create a ride. Please sign in and try again." };
+      return {
+        error:
+          "You must be signed in to create a ride. Please sign in and try again.",
+      };
     }
 
     console.log("✅ Creating ride for authenticated user:", userId);
