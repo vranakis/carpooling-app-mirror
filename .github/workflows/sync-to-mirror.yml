@@ -16,7 +16,7 @@ jobs:
 
       - name: Push to mirror repo
         env:
-          MIRROR_REPO_TOKEN_2: ${{ secrets.MIRROR_REPO_TOKEN_2 }}
+          MIRROR_REPO_TOKEN: ${{ secrets.MIRROR_REPO_TOKEN }}
         run: |
-          git remote add mirror https://${MIRROR_REPO_TOKEN_2}@github.com/vranakis/carpooling-app-mirror.git
+          git remote add mirror https://${MIRROR_REPO_TOKEN}@github.com/vranakis/carpooling-app-mirror.git
           git push mirror main --force
