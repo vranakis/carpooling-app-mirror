@@ -13,7 +13,7 @@ import Link from "next/link";
 export default async function HomePage() {
   console.log("🏠 Homepage - Server Component - Fetching rides...");
 
-  // Fetch rides server-side
+  // Fetch rides server-side.
   let rides = [];
   let error = null;
 
