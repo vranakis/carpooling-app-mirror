@@ -1,0 +1,22 @@
+name: Sync to Mirror Repo
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout organization repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to mirror repo
+        env:
+          MIRROR_REPO_TOKEN: ${{ secrets.MIRROR_REPO_TOKEN }}
+        run: |
+          git remote add mirror https://${MIRROR_REPO_TOKEN}@github.com/vranakis/carpooling-app-mirror.git
+          git push mirror main --force
