@@ -1,5 +1,5 @@
 // app/api/rides/route.ts
-// GET endpoint to fetch all active rides (no auth required for browsing)
+// GET endpoint to fetch all active rides (no auth required for browsing).
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAllRides } from "@/lib/database/helpers";
