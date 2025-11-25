@@ -1,10 +1,3 @@
-name: Sync to Mirror Repo
-
-on:
-  push:
-    branches:
-      - main
-
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -13,6 +6,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Test token exists
+        run: |
+          if [ -z "$MIRROR_REPO_TOKEN" ]; then
+            echo "Token is EMPTY"
+          else
+            echo "Token exists (length: ${#MIRROR_REPO_TOKEN})"
+          fi
+        env:
+          MIRROR_REPO_TOKEN: ${{ secrets.MIRROR_REPO_TOKEN }}
 
       - name: Push to mirror repo
         env:
