@@ -14,6 +14,8 @@ const nextConfig = {
       bodySizeLimit: '2mb',
     },
   },
+  // Force middleware to use Node.js runtime
+  serverComponentsExternalPackages: ['@clerk/nextjs'],
 }
 
 export default nextConfig
