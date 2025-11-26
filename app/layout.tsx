@@ -2,7 +2,7 @@ import type React from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import AppHeader from "@/components/app-header";
+import AppHeaderWrapper from "@/components/app-header-wrapper";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ClerkClientProvider } from "@/components/clerk-provider";
 
@@ -24,7 +24,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <ClerkClientProvider>
           <ThemeProvider>
-            <AppHeader />
+            <AppHeaderWrapper />
             <main className="min-h-screen bg-gray-50 dark:bg-gray-700">
               {children}
             </main>
