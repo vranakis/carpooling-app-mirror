@@ -4,7 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import AppHeaderWrapper from "@/components/app-header-wrapper";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ClerkClientProvider } from "@/components/clerk-provider";
+import { ClerkProvider } from "@clerk/nextjs";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,17 +20,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning={true}>
-      <body className={inter.className}>
-        <ClerkClientProvider>
-          <ThemeProvider>
+    <ClerkProvider>
+      <html lang="en" suppressHydrationWarning={true}>
+        <body className={inter.className}>
+          <ThemeProvider attribute="class" defaultTheme="dark">
             <AppHeaderWrapper />
             <main className="min-h-screen bg-gray-50 dark:bg-gray-700">
               {children}
             </main>
           </ThemeProvider>
-        </ClerkClientProvider>
-      </body>
-    </html>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

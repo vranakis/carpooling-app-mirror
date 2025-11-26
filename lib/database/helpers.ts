@@ -27,6 +27,8 @@ export interface Ride {
   destination: string;
   origin_place_id?: string;
   destination_place_id?: string;
+  origin_coordinates?: any; // GeoJSON from PostGIS
+  destination_coordinates?: any; // GeoJSON from PostGIS
   departure_time: string;
   estimated_arrival_time?: string;
   available_seats: number;

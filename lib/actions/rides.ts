@@ -21,7 +21,9 @@ import {
 // TYPES
 // ============================================
 
-interface RideWithMatch extends Awaited<ReturnType<typeof getRideByIdHelper>> {
+import type { Ride } from "@/lib/database/helpers";
+
+interface RideWithMatch extends Ride {
   // Original route (A → D)
   originalRoute?: RouteInfo;
 
@@ -577,34 +579,19 @@ async function parseCoordinates(
 
 /**
  * Create a new ride
- * Requires authentication via Clerk
+ * userId is passed from the server component after authentication
  */
-export async function createRide(formData: FormData) {
+export async function createRide(userId: string, formData: FormData) {
   try {
-    // Get authenticated user from Clerk
-    let userId: string | null = null;
-
-    try {
-      const authResult = await auth();
-      userId = authResult.userId;
-    } catch (authError: any) {
-      console.error("❌ Auth error details:", authError);
-      return {
-        error:
-          "Authentication error. Please make sure you're signed in and Clerk is properly configured.",
-        details: authError.message,
-      };
-    }
-
+    // Validate userId
     if (!userId) {
-      console.log("❌ User not authenticated - cannot create ride");
+      console.log("❌ No userId provided - cannot create ride");
       return {
-        error:
-          "You must be signed in to create a ride. Please sign in and try again.",
+        error: "User authentication required. Please sign in and try again.",
       };
     }
 
-    console.log("✅ Creating ride for authenticated user:", userId);
+    console.log("✅ Creating ride for user:", userId);
 
     const origin = formData.get("origin") as string;
     const destination = formData.get("destination") as string;

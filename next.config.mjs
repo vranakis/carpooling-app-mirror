@@ -14,7 +14,6 @@ const nextConfig = {
       bodySizeLimit: '2mb',
     },
   },
-  serverExternalPackages: ['@clerk/nextjs', '@clerk/backend'],
 }
 
 export default nextConfig
