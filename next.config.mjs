@@ -13,7 +13,6 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
-    nodeMiddleware: true,
   },
   serverExternalPackages: ['@clerk/nextjs', '@clerk/backend'],
 }
