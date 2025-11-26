@@ -13,11 +13,9 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
+    nodeMiddleware: true,
   },
-  // Force Node.js runtime for all routes
-  experimental: {
-    serverComponentsExternalPackages: ['@clerk/nextjs', '@clerk/backend'],
-  },
+  serverExternalPackages: ['@clerk/nextjs', '@clerk/backend'],
 }
 
 export default nextConfig
