@@ -4,7 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import AppHeader from "@/components/app-header";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ClerkProvider } from "@clerk/nextjs";
+import { ClerkClientProvider } from "@/components/clerk-provider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -14,15 +14,13 @@ export const metadata: Metadata = {
   generator: "v0.dev",
 };
 
-export const dynamic = "force-dynamic";
-
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
+    <ClerkClientProvider>
       <html lang="en" suppressHydrationWarning={true}>
         <body className={inter.className}>
           <ThemeProvider>
@@ -33,6 +31,6 @@ export default function RootLayout({
           </ThemeProvider>
         </body>
       </html>
-    </ClerkProvider>
+    </ClerkClientProvider>
   );
 }
